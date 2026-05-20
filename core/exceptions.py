@@ -76,6 +76,3 @@ class PipelineError(LeadGenBaseError):
 
 class MaxIterationsError(PipelineError):
     """Pipeline hit max iteration limit (safety circuit breaker)."""
-
-class NoCacheError(LeadGenBaseError):
-    """Redis cache miss. Not an error, just a signal to proceed without cache."""

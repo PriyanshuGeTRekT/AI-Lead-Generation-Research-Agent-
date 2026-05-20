@@ -10,6 +10,7 @@ Extends BaseAgent for:
   - LLM calls with Redis caching + exponential backoff retry
   - Consistent JSON parsing
 """
+import json
 from graph.state import LeadState
 from agents.base import BaseAgent
 from tools.web_search import search_companies, scrape_company_info
@@ -73,17 +74,21 @@ class ResearchAgent(BaseAgent):
         self.log.info(f"Found {len(search_results)} search results")
         new_leads = []
 
-        for result in search_results[:settings.max_leads_per_run]:
+        # Filter out social media/directory URLs first, then cap at max_leads_per_run.
+        # Filtering after slicing meant a run could process 0 valid companies if
+        # the top N results were all LinkedIn/Facebook pages.
+        SKIP_DOMAINS = ["linkedin.com", "facebook.com", "twitter.com", "instagram.com", "youtube.com"]
+        valid_results = [
+            r for r in search_results
+            if r.get("url") and not any(skip in r["url"] for skip in SKIP_DOMAINS)
+        ][:settings.max_leads_per_run]
+
+        for result in valid_results:
             url = result.get("url", "")
-            if not url or any(skip in url for skip in [
-                "linkedin.com", "facebook.com", "twitter.com", "instagram.com", "youtube.com"
-            ]):
-                continue
 
             # Scrape website content
             scraped = scrape_company_info(url)
 
-            import json
             prompt = RESEARCH_PROMPT.format(
                 search_results=json.dumps(result, indent=2),
                 scraped_content=scraped[:1500],

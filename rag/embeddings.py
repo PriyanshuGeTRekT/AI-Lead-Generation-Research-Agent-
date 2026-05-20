@@ -1,5 +1,5 @@
 """
-RAG Pipeline: Chunking → Embeddings → ChromaDB vector store.
+RAG Pipeline: Chunking -> Embeddings -> ChromaDB vector store.
 Uses HuggingFace sentence-transformers (open source, no API key needed).
 """
 import os
@@ -7,28 +7,33 @@ from typing import List, Dict
 import chromadb
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
+from loguru import logger
 
 CHROMA_PATH = os.getenv("CHROMA_PATH", "./data/chroma_db")
 COLLECTION_NAME = "hrms_knowledge"
 EMBED_MODEL = "all-MiniLM-L6-v2"  # Fast, lightweight, 384-dim embeddings
 
-# Singleton model (avoid reloading)
+# Singletons (avoid reloading on every call)
 _model = None
+_chroma_client = None
 
 
 def get_model() -> SentenceTransformer:
     global _model
     if _model is None:
-        print(f"[Embeddings] Loading model: {EMBED_MODEL}")
+        logger.info(f"Loading embedding model: {EMBED_MODEL}")
         _model = SentenceTransformer(EMBED_MODEL)
     return _model
 
 
 def get_chroma_client() -> chromadb.Client:
-    return chromadb.PersistentClient(
-        path=CHROMA_PATH,
-        settings=Settings(anonymized_telemetry=False)
-    )
+    global _chroma_client
+    if _chroma_client is None:
+        _chroma_client = chromadb.PersistentClient(
+            path=CHROMA_PATH,
+            settings=Settings(anonymized_telemetry=False)
+        )
+    return _chroma_client
 
 
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
@@ -67,7 +72,7 @@ def ingest_documents(documents: List[Dict]) -> int:
 
     for doc_idx, doc in enumerate(documents):
         chunks = chunk_text(doc["content"])
-        print(f"[Embeddings] {doc['url']} → {len(chunks)} chunks")
+        logger.info(f"{doc['url']}: {len(chunks)} chunks")
 
         for chunk_idx, chunk in enumerate(chunks):
             chunk_id = f"doc_{doc_idx}_chunk_{chunk_idx}"
@@ -80,7 +85,7 @@ def ingest_documents(documents: List[Dict]) -> int:
             })
 
     # Batch embed
-    print(f"[Embeddings] Embedding {len(all_chunks)} chunks...")
+    logger.info(f"Embedding {len(all_chunks)} chunks...")
     embeddings = model.encode(all_chunks, show_progress_bar=True).tolist()
 
     # Store in ChromaDB
@@ -91,7 +96,7 @@ def ingest_documents(documents: List[Dict]) -> int:
         metadatas=all_metadatas,
     )
 
-    print(f"[Embeddings] Stored {len(all_chunks)} chunks in ChromaDB.")
+    logger.info(f"Stored {len(all_chunks)} chunks in ChromaDB.")
     return len(all_chunks)
 
 

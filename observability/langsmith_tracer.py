@@ -80,14 +80,17 @@ def stage_timer(stage_name: str):
             try:
                 result = func(*args, **kwargs)
                 elapsed = time.time() - start
-                logger.bind(agent=stage_name, correlation_id="sys").info(
-                    f"Stage completed in {elapsed:.2f}s",
-                    extra={"stage": stage_name, "latency_ms": int(elapsed * 1000)}
-                )
+                latency_ms = int(elapsed * 1000)
+                logger.bind(
+                    agent=stage_name,
+                    correlation_id="sys",
+                    stage=stage_name,
+                    latency_ms=latency_ms,
+                ).info(f"Stage completed in {elapsed:.2f}s")
                 # Log to metrics file
                 _append_metric("latency", {
                     "stage": stage_name,
-                    "latency_ms": int(elapsed * 1000),
+                    "latency_ms": latency_ms,
                     "timestamp": datetime.utcnow().isoformat(),
                 })
                 return result

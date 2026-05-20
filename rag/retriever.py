@@ -4,6 +4,7 @@ Used by agents to ground their responses in real HRMS product knowledge,
 preventing hallucinations about what HumanMaximizer actually does.
 """
 from typing import List, Optional
+from loguru import logger
 from rag.embeddings import get_model, get_chroma_client, COLLECTION_NAME
 
 
@@ -53,7 +54,8 @@ def retrieve(query: str, top_k: int = 4) -> str:
         return "\n\n---\n\n".join(context_parts)
 
     except Exception as e:
-        return f"RAG retrieval error: {e}"
+        logger.warning(f"RAG retrieval failed: {e}")
+        return "No product context available."
 
 
 def retrieve_hrms_context(company_description: str) -> str:

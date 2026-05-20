@@ -21,8 +21,6 @@ class Lead(TypedDict):
 class LeadState(TypedDict):
     keyword: str                              # Input: business category to search
     leads: List[Lead]                         # All leads, replaced (not appended) each step
-    current_lead: Optional[Lead]              # Lead being processed right now
-    rag_context: Optional[str]                # Retrieved context from vector DB
     messages: Annotated[List[str], operator.add]  # Agent message log (appended each step)
     next: str                                 # Which agent runs next
     iteration: int                            # Loop counter (prevent infinite loops)

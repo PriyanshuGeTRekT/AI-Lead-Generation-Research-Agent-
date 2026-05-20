@@ -90,8 +90,6 @@ def run_pipeline(keyword: str) -> LeadState:
     initial_state: LeadState = {
         "keyword": keyword,
         "leads": [],
-        "current_lead": None,
-        "rag_context": None,
         "messages": [],
         "next": "qualify",
         "iteration": 0,

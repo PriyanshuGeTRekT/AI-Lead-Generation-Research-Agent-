@@ -31,7 +31,6 @@ import hashlib
 import redis
 from typing import Optional, Any
 from core.config import get_settings
-from core.exceptions import NoCacheError
 
 settings = get_settings()
 _client: Optional[redis.Redis] = None

@@ -10,6 +10,7 @@ Endpoints:
   GET  /health            → Detailed health check
 """
 import json
+import os
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
@@ -22,7 +23,7 @@ from typing import Optional
 from core.config import get_settings
 from core.exceptions import (
     PromptInjectionError, InputValidationError,
-    RateLimitExceededError, RAGNotReadyError, LLMError
+    RateLimitExceededError, LLMError
 )
 from core.security import validate_keyword
 from core.logging import setup_logging
@@ -192,11 +193,13 @@ def generate_leads(request: LeadRequest, req: Request):
         # Log quality metrics for observability
         log_lead_quality(leads)
 
-        # Persist results
+        # Persist results with atomic write (avoids corrupt file on concurrent requests or mid-write crash)
         data_path = Path(settings.data_path)
         data_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(data_path, "w") as f:
+        tmp_path = data_path.with_suffix(".tmp")
+        with open(tmp_path, "w") as f:
             json.dump(leads, f, indent=2)
+        os.replace(tmp_path, data_path)
 
         qualified = [l for l in leads if l.get("status") == "outreach_ready"]
         disqualified = [l for l in leads if l.get("status") == "disqualified"]
@@ -229,8 +232,11 @@ def get_leads(status: Optional[str] = None):
     if not data_path.exists():
         return {"leads": [], "message": "No leads yet. Call POST /generate-leads first."}
 
-    with open(data_path) as f:
-        leads = json.load(f)
+    try:
+        with open(data_path) as f:
+            leads = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        raise HTTPException(status_code=500, detail=f"Could not read leads file: {e}")
 
     if status:
         leads = [l for l in leads if l.get("status") == status]

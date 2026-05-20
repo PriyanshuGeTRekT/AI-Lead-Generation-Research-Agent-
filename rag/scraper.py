@@ -4,9 +4,10 @@ This gives our agents domain knowledge about HRMS software
 so they can identify relevant leads and craft better outreach.
 """
 import requests
-from bs4 import BeautifulSoup
-from typing import List, Dict
 import time
+from typing import List, Dict
+from bs4 import BeautifulSoup
+from loguru import logger
 
 
 SEED_URLS = [
@@ -51,21 +52,23 @@ def build_corpus() -> List[Dict]:
     Scrape all seed URLs and return list of documents for RAG ingestion.
     """
     corpus = []
-    print("[Scraper] Building HRMS knowledge base from humanmaximizer.com...")
+    logger.info("Building HRMS knowledge base from humanmaximizer.com...")
 
     for url in SEED_URLS:
-        print(f"  Scraping: {url}")
+        logger.info(f"Scraping: {url}")
         doc = scrape_page(url)
         if doc["content"]:
             corpus.append(doc)
+        elif doc.get("error"):
+            logger.warning(f"Scrape failed for {url}: {doc['error']}")
         time.sleep(1)  # Polite crawling
 
-    print(f"[Scraper] Done. {len(corpus)} pages scraped.")
+    logger.info(f"Done. {len(corpus)} pages scraped.")
     return corpus
 
 
 if __name__ == "__main__":
     corpus = build_corpus()
     for doc in corpus:
-        print(f"\n=== {doc['url']} ===")
-        print(doc["content"][:500])
+        logger.info(f"=== {doc['url']} ===")
+        logger.debug(doc["content"][:500])

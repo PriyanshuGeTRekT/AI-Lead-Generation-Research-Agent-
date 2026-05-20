@@ -165,24 +165,6 @@ def _get_fallback_companies(keyword: str) -> List[Dict]:
     return relevant[:8]
 
 
-def search_decision_makers(company_name: str) -> List[str]:
-    """
-    Search for decision makers (HR heads, CTOs, CEOs) at a company.
-    """
-    decision_makers = []
-    query = f"{company_name} HR director CEO CTO LinkedIn"
-
-    try:
-        with DDGS() as ddgs:
-            for r in ddgs.text(query, max_results=5):
-                snippet = r.get("body", "")
-                decision_makers.append(snippet[:200])
-    except Exception as e:
-        print(f"[DecisionMakerSearch] Error: {e}")
-
-    return decision_makers
-
-
 def scrape_company_info(url: str) -> str:
     """
     Scrape basic info from a company website.
