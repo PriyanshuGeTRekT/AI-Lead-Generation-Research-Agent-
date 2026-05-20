@@ -3,9 +3,9 @@ const pptxgen = require("pptxgenjs");
 const pres = new pptxgen();
 pres.layout = "LAYOUT_16x9";
 pres.author = "Priyanshu";
-pres.title = "AI Lead Generation & Research Agent — Architecture";
+pres.title = "AI Lead Generation & Research Agent: Architecture";
 
-// ── Color Palette ─────────────────────────────────────────────────────────────
+// Color Palette
 const C = {
   navy:      "0D1B2A",  // dominant dark
   blue:      "1B4F72",  // section headers
@@ -23,9 +23,9 @@ const C = {
 
 const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color: "000000", opacity: 0.1 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 1 — Cover
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// SLIDE1 -Cover
+// ----------------------------------------------------------------------------
 {
   const s = pres.addSlide();
   s.background = { color: C.navy };
@@ -79,9 +79,9 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 2 — System Overview
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// SLIDE2 -System Overview
+// ----------------------------------------------------------------------------
 {
   const s = pres.addSlide();
   s.background = { color: C.lightGray };
@@ -114,7 +114,7 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
 
   const agents = [
     { name: "Research Agent", desc: "Web search + scrape\nLLM extracts lead JSON\nDuckDuckGo + BS4", color: C.blue },
-    { name: "Qualification Agent", desc: "Score 0–10 via LLM\nRAG-grounded reasoning\nRoutes: Sales or Discard", color: C.accent },
+    { name: "Qualification Agent", desc: "Score 0-10 via LLM\nRAG-grounded reasoning\nRoutes: Sales or Discard", color: C.accent },
     { name: "Sales Agent", desc: "Personalized outreach\nRAG product grounding\nSubject + email body", color: C.mint },
   ];
 
@@ -134,15 +134,15 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   s.addText("Output\nJSON\n+\nEmail", { x: 9.5, y: 3.3, w: 0.35, h: 1.6, fontSize: 7, color: C.white, align: "center", fontFace: "Calibri" });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 3 — Multi-Agent Architecture (Supervisor Pattern)
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// SLIDE3 -Multi-Agent Architecture (Supervisor Pattern)
+// ----------------------------------------------------------------------------
 {
   const s = pres.addSlide();
   s.background = { color: C.white };
 
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 0.75, fill: { color: C.accent } });
-  s.addText("MULTI-AGENT ARCHITECTURE — SUPERVISOR PATTERN", { x: 0.35, y: 0, w: 9.3, h: 0.75, fontSize: 16, bold: true, color: C.white, valign: "middle", fontFace: "Calibri" });
+  s.addText("MULTI-AGENT ARCHITECTURE -SUPERVISOR PATTERN", { x: 0.35, y: 0, w: 9.3, h: 0.75, fontSize: 16, bold: true, color: C.white, valign: "middle", fontFace: "Calibri" });
 
   // Supervisor box
   s.addShape(pres.shapes.RECTANGLE, { x: 3.5, y: 0.95, w: 3.0, h: 0.85, fill: { color: C.navy }, shadow: makeShadow() });
@@ -162,7 +162,7 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
     },
     {
       name: "Qualification Agent", x: 3.5, color: C.accent,
-      items: ["Receives researched leads", "Retrieves RAG context", "LLM scores 0–10", "Routes: score ≥ 5 → Sales", "Routes: score < 5 → Discard"],
+      items: ["Receives researched leads", "Retrieves RAG context", "LLM scores 0-10", "Routes: score ≥ 5 → Sales", "Routes: score < 5 → Discard"],
     },
     {
       name: "Sales Agent", x: 6.7, color: C.mint,
@@ -183,20 +183,20 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
 
   // Shared state label
   s.addShape(pres.shapes.RECTANGLE, { x: 0.3, y: 5.35, w: 9.4, h: 0.22, fill: { color: C.navy } });
-  s.addText("Shared LeadState (TypedDict) — flows through all agents via LangGraph", {
+  s.addText("Shared LeadState (TypedDict) -flows through all agents via LangGraph", {
     x: 0.3, y: 5.35, w: 9.4, h: 0.22, fontSize: 9, color: C.white, align: "center", valign: "middle", fontFace: "Calibri",
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 4 — RAG Pipeline
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// SLIDE4 -RAG Pipeline
+// ----------------------------------------------------------------------------
 {
   const s = pres.addSlide();
   s.background = { color: C.lightGray };
 
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 0.75, fill: { color: C.mint } });
-  s.addText("RAG PIPELINE — RETRIEVAL AUGMENTED GENERATION", { x: 0.35, y: 0, w: 9.3, h: 0.75, fontSize: 16, bold: true, color: C.white, valign: "middle", fontFace: "Calibri" });
+  s.addText("RAG PIPELINE -RETRIEVAL AUGMENTED GENERATION", { x: 0.35, y: 0, w: 9.3, h: 0.75, fontSize: 16, bold: true, color: C.white, valign: "middle", fontFace: "Calibri" });
 
   // Ingestion pipeline (top)
   s.addText("INGESTION (One-time)", { x: 0.3, y: 0.88, w: 4, h: 0.32, fontSize: 11, bold: true, color: C.blue, fontFace: "Calibri" });
@@ -243,9 +243,9 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   s.addShape(pres.shapes.RECTANGLE, { x: 0.3, y: 4.2, w: 0.12, h: 1.2, fill: { color: C.red } });
   s.addText("HALLUCINATION GUARD (3 Layers)", { x: 0.55, y: 4.25, w: 5, h: 0.32, fontSize: 11, bold: true, color: C.red, fontFace: "Calibri" });
   const guardItems = [
-    "Layer 1 — Retrieval confidence: if cosine distance > 0.8, flag as low-confidence",
-    "Layer 2 — Output scan: detect fabricated revenue figures, headcounts, founding years",
-    "Layer 3 — Product claim grounding: any HumanMaximizer claim must exist in RAG context",
+    "Layer 1 -Retrieval confidence: if cosine distance > 0.8, flag as low-confidence",
+    "Layer 2 -Output scan: detect fabricated revenue figures, headcounts, founding years",
+    "Layer 3 -Product claim grounding: any HumanMaximizer claim must exist in RAG context",
   ];
   const guardBullets = guardItems.map((item, i) => ({
     text: item, options: { bullet: true, breakLine: i < guardItems.length - 1, fontSize: 9.5, color: C.darkGray },
@@ -253,9 +253,9 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   s.addText(guardBullets, { x: 0.55, y: 4.6, w: 9.1, h: 0.75, fontFace: "Calibri" });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 5 — Observability & Monitoring
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// SLIDE5 -Observability & Monitoring
+// ----------------------------------------------------------------------------
 {
   const s = pres.addSlide();
   s.background = { color: C.white };
@@ -324,9 +324,9 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 6 — Scaling Architecture
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// SLIDE6 -Scaling Architecture
+// ----------------------------------------------------------------------------
 {
   const s = pres.addSlide();
   s.background = { color: C.lightGray };
@@ -377,9 +377,9 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 7 — Fine-Tuning Strategy
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// SLIDE7 -Fine-Tuning Strategy
+// ----------------------------------------------------------------------------
 {
   const s = pres.addSlide();
   s.background = { color: C.white };
@@ -454,9 +454,9 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 8 — Security & Edge Cases
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// SLIDE8 -Security & Edge Cases
+// ----------------------------------------------------------------------------
 {
   const s = pres.addSlide();
   s.background = { color: C.lightGray };
@@ -517,9 +517,9 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 9 — Architectural Decisions
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// SLIDE9 -Architectural Decisions
+// ----------------------------------------------------------------------------
 {
   const s = pres.addSlide();
   s.background = { color: C.white };
@@ -528,12 +528,12 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   s.addText("ARCHITECTURAL DECISIONS", { x: 0.35, y: 0, w: 9.3, h: 0.75, fontSize: 16, bold: true, color: C.white, valign: "middle", fontFace: "Calibri" });
 
   const decisions = [
-    { decision: "Supervisor Pattern (LangGraph)", reason: "Conditional routing + shared state. Sequential pipeline is too rigid — can't discard low-quality leads or loop back for missing data. LangGraph's StateGraph gives full control over agent flow.", color: C.navy },
-    { decision: "Groq + Llama 3 (not local)", reason: "Open-source model (requirement met) + free, fast inference. Local deployment adds 2-3hr setup friction on deadline. Swap to Ollama in 30 mins if needed — zero code change, just config.", color: C.blue },
+    { decision: "Supervisor Pattern (LangGraph)", reason: "Conditional routing + shared state. Sequential pipeline is too rigid -can't discard low-quality leads or loop back for missing data. LangGraph's StateGraph gives full control over agent flow.", color: C.navy },
+    { decision: "Groq + Llama 3 (not local)", reason: "Open-source model (requirement met) + free, fast inference. Local deployment adds 2-3hr setup friction on deadline. Swap to Ollama in 30 mins if needed -zero code change, just config.", color: C.blue },
     { decision: "ChromaDB (not FAISS/pgvector)", reason: "Persistent, local, no infra needed for demo. FAISS is in-memory (no persistence). pgvector needs PostgreSQL. ChromaDB is the right tool for a self-contained demo; pgvector is the production path.", color: C.accent },
     { decision: "Redis for caching & rate limiting", reason: "Atomic operations (no race conditions across replicas). Built-in TTL. Enables dedup, caching, rate limiting, and pipeline state persistence in one service. Not optional at scale.", color: C.orange },
     { decision: "all-MiniLM-L6-v2 embeddings", reason: "384-dim vectors, fast on CPU, no GPU needed. HuggingFace open-source (requirement met). Semantic quality is sufficient for HRMS domain matching. Upgrade path: BGE-M3 for multilingual.", color: C.mint },
-    { decision: "3-layer hallucination guard", reason: "RAG alone doesn't prevent hallucination — LLMs can ignore context. Adding retrieval confidence scoring, pattern detection, and product claim grounding creates defence-in-depth.", color: C.green },
+    { decision: "3-layer hallucination guard", reason: "RAG alone doesn't prevent hallucination -LLMs can ignore context. Adding retrieval confidence scoring, pattern detection, and product claim grounding creates defence-in-depth.", color: C.green },
   ];
 
   decisions.forEach((d, i) => {
@@ -549,9 +549,9 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 10 — Tech Stack & Requirements Checklist
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// SLIDE10 -Tech Stack & Requirements Checklist
+// ----------------------------------------------------------------------------
 {
   const s = pres.addSlide();
   s.background = { color: C.lightGray };
@@ -606,9 +606,9 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 // WRITE FILE
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 pres.writeFile({ fileName: "C:/Users/priya/Documents/ai-lead-gen/AI_Lead_Gen_Architecture.pptx" })
   .then(() => console.log("✅ Architecture presentation saved!"))
   .catch(e => console.error("❌ Error:", e));

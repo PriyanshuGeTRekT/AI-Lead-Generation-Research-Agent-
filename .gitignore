@@ -1,8 +1,8 @@
-# Environment — never commit secrets
+# Environment (never commit secrets)
 .env
 *.env
 
-# Data — generated at runtime, not source code
+# Data (generated at runtime, not source code)
 data/chroma_db/
 data/leads.json
 data/metrics.jsonl
