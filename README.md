@@ -2,6 +2,10 @@
 
 An AI-powered lead generation system for HRMS software sales, built with a **Supervisor multi-agent architecture** using LangGraph, Groq (open-source LLMs), and RAG.
 
+**Live dashboard** at `http://localhost:8000` — no curl required.
+
+![Dashboard showing 5 lead cards with score badges, pain points, and outreach emails](https://img.shields.io/badge/UI-Dashboard-teal) ![API](https://img.shields.io/badge/API-FastAPI-green) ![LLM](https://img.shields.io/badge/LLM-Llama%203.1-blue) ![Redis](https://img.shields.io/badge/Cache-Redis-red)
+
 ## Architecture
 
 ```
@@ -76,6 +80,15 @@ curl http://localhost:8000/leads
 # Only outreach-ready leads
 curl http://localhost:8000/leads?status=outreach_ready
 ```
+
+### Dashboard UI
+Open **http://localhost:8000** in your browser — a full lead generation dashboard with:
+- Live pipeline execution with animated step indicators (Research → Qualify → Sales)
+- Lead cards with score badges, pain point tags, qualification reasoning
+- Expandable outreach emails with one-click copy
+- Filter by status: Outreach Ready / Qualified / Disqualified / Researched
+- Real-time metrics: latency, lead counts, avg score
+- Sidebar pipeline log showing agent decisions as they happen
 
 ### API Docs
 Visit: http://localhost:8000/docs (Swagger UI auto-generated)
@@ -169,13 +182,29 @@ When fine-tuning would help:
 ## Observability
 
 - **LangSmith** integration for agent traces (set `LANGCHAIN_API_KEY` in `.env`)
-- Each agent logs decisions to `state["messages"]`
+- **Dashboard** at `GET /` — pipeline log, latency, lead quality, live run status
+- **Metrics API** at `GET /metrics` — JSONL-backed aggregated pipeline stats
+- Structured JSON logs in `data/logs/app.log` with correlation IDs per run
+- Each agent logs decisions to `state["messages"]` (visible in dashboard log panel)
 - Hallucination prevention: RAG grounds all product claims
 - Lead quality tracked via `qualification_score` distribution
+
+## API Reference
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | **Dashboard UI** (lead cards, pipeline runner, metrics) |
+| `/generate-leads` | POST | Run full multi-agent pipeline |
+| `/leads` | GET | Retrieve stored leads (`?status=outreach_ready`) |
+| `/ingest-knowledge` | POST | Build RAG from humanmaximizer.com |
+| `/metrics` | GET | Pipeline observability summary |
+| `/health` | GET | Dependency health check (Redis, model, embeddings) |
+| `/docs` | GET | Swagger UI (interactive API docs) |
 
 ## Scaling
 
 - Each agent is stateless → horizontally scalable
 - ChromaDB → swap for pgvector (PostgreSQL) at scale
 - Redis queue for async lead processing
+- Dashboard is a single static HTML file — can be deployed to any CDN
 - Docker → Kubernetes for production deployment

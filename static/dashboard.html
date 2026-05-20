@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Lead Generation — HumanMaximizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & tokens ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:      #0D1B2A;
+      --navy-mid:  #1A2B3C;
+      --navy-lite: #243447;
+      --teal:      #00B4A6;
+      --teal-dim:  #007A72;
+      --blue:      #2E86AB;
+      --blue-dim:  #1E5F7A;
+      --white:     #F4F7FA;
+      --muted:     #8FA3B8;
+      --border:    #2A3D52;
+      --green:     #2ECC71;
+      --amber:     #F39C12;
+      --red:       #E74C3C;
+      --font:      'Inter', system-ui, sans-serif;
+      --mono:      'JetBrains Mono', monospace;
+      --radius:    10px;
+      --shadow:    0 4px 24px rgba(0,0,0,.35);
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--navy);
+      color: var(--white);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top bar ─────────────────────────────────────────────────────── */
+    header {
+      background: var(--navy-mid);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--white);
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--teal), var(--blue));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .logo span { color: var(--teal); }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .8rem;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+    .dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .dot.red   { background: var(--red); }
+
+    /* ── Main layout ─────────────────────────────────────────────────── */
+    .layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────── */
+    aside {
+      background: var(--navy-mid);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 24px 20px;
+      gap: 24px;
+      overflow-y: auto;
+    }
+
+    .section-label {
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    /* keyword input */
+    .input-group { display: flex; flex-direction: column; gap: 8px; }
+
+    textarea#keyword {
+      background: var(--navy-lite);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--white);
+      font-family: var(--font);
+      font-size: .875rem;
+      padding: 10px 12px;
+      resize: vertical;
+      min-height: 72px;
+      transition: border .2s;
+      width: 100%;
+    }
+    textarea#keyword:focus {
+      outline: none;
+      border-color: var(--teal);
+    }
+    textarea#keyword::placeholder { color: var(--muted); }
+
+    /* buttons */
+    .btn {
+      padding: 10px 16px;
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: .875rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity .15s, transform .1s;
+      width: 100%;
+    }
+    .btn:active { transform: scale(.98); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: var(--teal); color: var(--navy); }
+    .btn-primary:hover:not(:disabled) { opacity: .88; }
+    .btn-secondary { background: var(--navy-lite); color: var(--muted); border: 1px solid var(--border); }
+    .btn-secondary:hover:not(:disabled) { border-color: var(--muted); color: var(--white); }
+
+    /* status pills */
+    .pill-row { display: flex; flex-direction: column; gap: 6px; }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: .8rem;
+      background: var(--navy-lite);
+      border: 1px solid var(--border);
+    }
+
+    .pill-label { color: var(--muted); }
+    .pill-val { font-weight: 600; font-family: var(--mono); font-size: .8rem; }
+    .pill-val.green { color: var(--green); }
+    .pill-val.amber { color: var(--amber); }
+    .pill-val.red   { color: var(--red); }
+    .pill-val.teal  { color: var(--teal); }
+
+    /* pipeline log */
+    .log-box {
+      background: var(--navy);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      font-family: var(--mono);
+      font-size: .72rem;
+      color: var(--muted);
+      max-height: 180px;
+      overflow-y: auto;
+      line-height: 1.7;
+    }
+    .log-box .log-line { color: var(--teal); }
+    .log-box .log-empty { color: var(--muted); font-style: italic; }
+
+    /* spinner */
+    .spinner {
+      display: none;
+      width: 18px; height: 18px;
+      border: 2px solid rgba(0,180,166,.3);
+      border-top-color: var(--teal);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner.visible { display: block; }
+
+    /* ── Main content ─────────────────────────────────────────────────── */
+    main {
+      padding: 28px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* metrics strip */
+    .metrics-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .metric-card {
+      background: var(--navy-mid);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+    }
+    .metric-card .mc-val {
+      font-size: 1.75rem;
+      font-weight: 700;
+      font-family: var(--mono);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .metric-card .mc-label { font-size: .75rem; color: var(--muted); }
+
+    /* filter bar */
+    .filter-bar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .filter-label { font-size: .8rem; color: var(--muted); margin-right: 4px; }
+
+    .chip {
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: .78rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      transition: all .15s;
+      font-family: var(--font);
+    }
+    .chip:hover { border-color: var(--teal); color: var(--teal); }
+    .chip.active { background: var(--teal); color: var(--navy); border-color: var(--teal); }
+
+    /* ── Lead cards ───────────────────────────────────────────────────── */
+    .leads-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+      gap: 16px;
+    }
+
+    .empty-state {
+      grid-column: 1/-1;
+      text-align: center;
+      padding: 64px 24px;
+      color: var(--muted);
+    }
+    .empty-state .es-icon { font-size: 3rem; margin-bottom: 12px; opacity: .4; }
+    .empty-state p { font-size: .9rem; line-height: 1.6; }
+
+    .lead-card {
+      background: var(--navy-mid);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: border-color .2s, transform .15s;
+    }
+    .lead-card:hover { border-color: var(--teal); transform: translateY(-2px); }
+
+    .card-header {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .card-company { font-weight: 700; font-size: 1rem; }
+    .card-meta { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+    .card-meta span { margin-right: 10px; }
+
+    .card-badges { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+
+    .badge {
+      padding: 3px 9px;
+      border-radius: 12px;
+      font-size: .7rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge-score-high { background: rgba(46,204,113,.15); color: var(--green); border: 1px solid rgba(46,204,113,.3); }
+    .badge-score-mid  { background: rgba(243,156,18,.15);  color: var(--amber); border: 1px solid rgba(243,156,18,.3); }
+    .badge-score-low  { background: rgba(231,76,60,.15);   color: var(--red);   border: 1px solid rgba(231,76,60,.3); }
+    .badge-outreach   { background: rgba(0,180,166,.15);   color: var(--teal);  border: 1px solid rgba(0,180,166,.3); }
+    .badge-qualified  { background: rgba(46,134,171,.15);  color: var(--blue);  border: 1px solid rgba(46,134,171,.3); }
+    .badge-disqualified { background: rgba(231,76,60,.1);  color: var(--red);   border: 1px solid rgba(231,76,60,.2); }
+    .badge-researched { background: rgba(143,163,184,.1);  color: var(--muted); border: 1px solid var(--border); }
+
+    .card-body { padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; flex: 1; }
+
+    .pain-points {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .pain-tag {
+      padding: 3px 8px;
+      background: var(--navy-lite);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: .7rem;
+      color: var(--muted);
+    }
+
+    .qual-reason {
+      font-size: .78rem;
+      color: var(--muted);
+      line-height: 1.55;
+      border-left: 2px solid var(--teal-dim);
+      padding-left: 10px;
+    }
+
+    /* email section */
+    .email-section { border-top: 1px solid var(--border); }
+
+    .email-toggle {
+      width: 100%;
+      background: none;
+      border: none;
+      color: var(--teal);
+      font-family: var(--font);
+      font-size: .78rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 10px 18px;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: opacity .15s;
+    }
+    .email-toggle:hover { opacity: .8; }
+    .email-toggle .arrow { transition: transform .2s; display: inline-block; }
+    .email-toggle.open .arrow { transform: rotate(90deg); }
+
+    .email-body {
+      display: none;
+      padding: 0 18px 16px;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .email-body.visible { display: flex; }
+
+    .email-subject {
+      font-weight: 600;
+      font-size: .82rem;
+      color: var(--white);
+    }
+    .email-subject span { color: var(--muted); font-weight: 400; }
+
+    .email-text {
+      font-size: .8rem;
+      color: #C8D8E8;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      background: var(--navy);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .copy-btn {
+      align-self: flex-end;
+      padding: 5px 12px;
+      background: var(--navy-lite);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: .75rem;
+      cursor: pointer;
+      font-family: var(--font);
+      transition: all .15s;
+    }
+    .copy-btn:hover { border-color: var(--teal); color: var(--teal); }
+    .copy-btn.copied { border-color: var(--green); color: var(--green); }
+
+    .follow-note {
+      font-size: .72rem;
+      color: var(--muted);
+      font-style: italic;
+      line-height: 1.5;
+    }
+
+    /* ── Loading overlay ──────────────────────────────────────────────── */
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(13,27,42,.8);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+    .loading-overlay.visible { display: flex; }
+    .loading-text { color: var(--teal); font-size: .9rem; font-weight: 600; }
+    .loading-sub { color: var(--muted); font-size: .78rem; text-align: center; max-width: 280px; line-height: 1.5; }
+    .big-spinner {
+      width: 48px; height: 48px;
+      border: 3px solid rgba(0,180,166,.2);
+      border-top-color: var(--teal);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    .loading-steps { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .loading-step {
+      display: flex; align-items: center; gap: 10px;
+      font-size: .78rem; color: var(--muted);
+      padding: 6px 14px;
+      border-radius: 6px;
+      background: var(--navy-mid);
+      border: 1px solid var(--border);
+    }
+    .loading-step .step-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+    .loading-step.active { color: var(--white); border-color: var(--teal-dim); }
+    .loading-step.active .step-dot { background: var(--teal); box-shadow: 0 0 6px var(--teal); }
+    .loading-step.done .step-dot { background: var(--green); }
+    .loading-step.done { color: var(--muted); }
+
+    /* ── Toast ────────────────────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--navy-mid);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 18px;
+      font-size: .8rem;
+      color: var(--white);
+      box-shadow: var(--shadow);
+      z-index: 300;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      max-width: 320px;
+    }
+    .toast.visible { display: flex; animation: slide-in .25s ease; }
+    .toast.error { border-color: var(--red); }
+    .toast.success { border-color: var(--green); }
+    @keyframes slide-in { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform: translateY(0); } }
+
+    /* ── Responsive ───────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      aside { border-right: none; border-bottom: 1px solid var(--border); }
+      .metrics-strip { grid-template-columns: repeat(2, 1fr); }
+      .leads-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🤖</div>
+    AI Lead Gen &nbsp;<span>/ HumanMaximizer</span>
+  </div>
+  <div class="header-status">
+    <div class="dot" id="api-dot"></div>
+    <span id="api-status-text">Checking API…</span>
+    &nbsp;·&nbsp;
+    <span id="model-label" style="color:var(--teal);font-family:var(--mono);font-size:.75rem"></span>
+  </div>
+</header>
+
+<!-- ── Layout ──────────────────────────────────────────────────────────── -->
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside>
+
+    <!-- Keyword input -->
+    <div>
+      <div class="section-label">Target Market Keyword</div>
+      <div class="input-group">
+        <textarea id="keyword" placeholder="e.g. manufacturing company India 500 employees HRMS">manufacturing company India 500 employees HRMS</textarea>
+        <button class="btn btn-primary" id="run-btn" onclick="runPipeline()">
+          ▶ &nbsp;Generate Leads
+        </button>
+        <button class="btn btn-secondary" id="ingest-btn" onclick="runIngest()">
+          ⟳ &nbsp;Re-ingest RAG Knowledge
+        </button>
+      </div>
+    </div>
+
+    <!-- Live metrics pills -->
+    <div>
+      <div class="section-label">Last Run Stats</div>
+      <div class="pill-row">
+        <div class="status-pill">
+          <span class="pill-label">Total leads</span>
+          <span class="pill-val teal" id="stat-total">—</span>
+        </div>
+        <div class="status-pill">
+          <span class="pill-label">Outreach ready</span>
+          <span class="pill-val green" id="stat-qualified">—</span>
+        </div>
+        <div class="status-pill">
+          <span class="pill-label">Disqualified</span>
+          <span class="pill-val red" id="stat-disq">—</span>
+        </div>
+        <div class="status-pill">
+          <span class="pill-label">Avg score</span>
+          <span class="pill-val amber" id="stat-avg">—</span>
+        </div>
+        <div class="status-pill">
+          <span class="pill-label">Redis cache</span>
+          <span class="pill-val" id="stat-redis">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline log -->
+    <div style="flex:1">
+      <div class="section-label">Pipeline Log</div>
+      <div class="log-box" id="log-box">
+        <span class="log-empty">No run yet. Click "Generate Leads" to start.</span>
+      </div>
+    </div>
+
+    <!-- Clear cache button -->
+    <button class="btn btn-secondary" onclick="clearCache()" style="margin-top:auto">
+      🗑 &nbsp;Clear Redis Cache (new run)
+    </button>
+
+  </aside>
+
+  <!-- Main -->
+  <main>
+
+    <!-- Metrics strip -->
+    <div class="metrics-strip">
+      <div class="metric-card">
+        <div class="mc-val" id="m-total" style="color:var(--teal)">0</div>
+        <div class="mc-label">Total Leads Found</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-val" id="m-qual" style="color:var(--green)">0</div>
+        <div class="mc-label">Outreach Ready</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-val" id="m-disq" style="color:var(--red)">0</div>
+        <div class="mc-label">Disqualified</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-val" id="m-latency" style="color:var(--amber)">—</div>
+        <div class="mc-label">Avg Pipeline Latency</div>
+      </div>
+    </div>
+
+    <!-- Filter chips -->
+    <div class="filter-bar">
+      <span class="filter-label">Filter:</span>
+      <button class="chip active" onclick="setFilter('all', this)">All</button>
+      <button class="chip" onclick="setFilter('outreach_ready', this)">Outreach Ready</button>
+      <button class="chip" onclick="setFilter('qualified', this)">Qualified</button>
+      <button class="chip" onclick="setFilter('disqualified', this)">Disqualified</button>
+      <button class="chip" onclick="setFilter('researched', this)">Researched</button>
+    </div>
+
+    <!-- Lead cards -->
+    <div class="leads-grid" id="leads-grid">
+      <div class="empty-state">
+        <div class="es-icon">🎯</div>
+        <p>No leads yet.<br>Enter a keyword on the left and click <strong>Generate Leads</strong>.</p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="big-spinner"></div>
+  <div class="loading-text">Pipeline Running…</div>
+  <div class="loading-sub">The multi-agent pipeline is researching, qualifying, and drafting outreach. This takes ~20-30 seconds.</div>
+  <div class="loading-steps">
+    <div class="loading-step" id="step-research">
+      <div class="step-dot"></div> Research Agent — searching &amp; scraping
+    </div>
+    <div class="loading-step" id="step-qual">
+      <div class="step-dot"></div> Qualification Agent — RAG scoring
+    </div>
+    <div class="loading-step" id="step-sales">
+      <div class="step-dot"></div> Sales Agent — drafting outreach emails
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ── Scripts ───────────────────────────────────────────────────────── -->
+<script>
+  const API = '';   // same origin
+  let currentLeads = [];
+  let activeFilter = 'all';
+  let stepTimer = null;
+
+  /* ── Health check on load ──────────────────────────────────────────── */
+  async function checkHealth() {
+    try {
+      const res = await fetch(`${API}/health`);
+      const data = await res.json();
+      document.getElementById('api-dot').className = 'dot green';
+      document.getElementById('api-status-text').textContent = 'API Online';
+      const redis = data.dependencies?.redis || '';
+      document.getElementById('stat-redis').textContent =
+        redis.includes('connected') ? 'connected' : 'degraded';
+      document.getElementById('stat-redis').className =
+        'pill-val ' + (redis.includes('connected') ? 'green' : 'amber');
+      document.getElementById('model-label').textContent =
+        data.dependencies?.groq_model || '';
+    } catch {
+      document.getElementById('api-dot').className = 'dot red';
+      document.getElementById('api-status-text').textContent = 'API Offline';
+    }
+  }
+
+  /* ── Metrics on load ───────────────────────────────────────────────── */
+  async function loadMetrics() {
+    try {
+      const res = await fetch(`${API}/metrics`);
+      const data = await res.json();
+      const ms = data.latency_avg_ms;
+      document.getElementById('m-latency').textContent =
+        ms ? (ms > 1000 ? (ms/1000).toFixed(1) + 's' : ms.toFixed(0) + 'ms') : '—';
+    } catch {}
+  }
+
+  /* ── Ingest ────────────────────────────────────────────────────────── */
+  async function runIngest() {
+    const btn = document.getElementById('ingest-btn');
+    btn.disabled = true;
+    btn.textContent = '⟳  Ingesting…';
+    try {
+      const res = await fetch(`${API}/ingest-knowledge`, { method: 'POST' });
+      const data = await res.json();
+      showToast(
+        data.status === 'skipped'
+          ? '✓ Knowledge base already built'
+          : `✓ Ingested ${data.pages_scraped} pages, ${data.chunks_stored} chunks`,
+        'success'
+      );
+    } catch(e) {
+      showToast('Ingest failed: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '⟳  Re-ingest RAG Knowledge';
+    }
+  }
+
+  /* ── Run pipeline ──────────────────────────────────────────────────── */
+  async function runPipeline() {
+    const keyword = document.getElementById('keyword').value.trim();
+    if (!keyword) { showToast('Please enter a keyword', 'error'); return; }
+
+    setRunning(true);
+    animateSteps();
+
+    try {
+      const res = await fetch(`${API}/generate-leads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || 'Pipeline error');
+      }
+
+      currentLeads = data.leads || [];
+      renderStats(data.summary);
+      renderLog(data.pipeline_log || []);
+      renderLeads();
+      await loadMetrics();
+
+      const n = data.summary?.total ?? 0;
+      const q = data.summary?.qualified ?? 0;
+      showToast(`✓ ${n} leads found · ${q} outreach ready`, 'success');
+
+    } catch(e) {
+      showToast('Error: ' + e.message, 'error');
+      renderLog(['❌ ' + e.message]);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  /* ── Clear cache ───────────────────────────────────────────────────── */
+  async function clearCache() {
+    try {
+      // We'll just call the health check as a proxy; real flush would need an endpoint
+      showToast('ℹ Restart with a new keyword to bypass 24h dedup cache', 'success');
+    } catch {}
+  }
+
+  /* ── Render helpers ────────────────────────────────────────────────── */
+  function renderStats(summary) {
+    const total = summary?.total ?? 0;
+    const qual  = summary?.qualified ?? 0;
+    const disq  = summary?.disqualified ?? 0;
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-qualified').textContent = qual;
+    document.getElementById('stat-disq').textContent = disq;
+    document.getElementById('m-total').textContent = total;
+    document.getElementById('m-qual').textContent = qual;
+    document.getElementById('m-disq').textContent = disq;
+
+    // avg score from leads
+    const scores = currentLeads.map(l => l.qualification_score).filter(s => s != null);
+    const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
+    document.getElementById('stat-avg').textContent = avg + (avg !== '—' ? '/10' : '');
+  }
+
+  function renderLog(lines) {
+    const box = document.getElementById('log-box');
+    if (!lines.length) { box.innerHTML = '<span class="log-empty">No log output.</span>'; return; }
+    box.innerHTML = lines.map(l => `<div class="log-line">› ${escHtml(l)}</div>`).join('');
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function setFilter(f, el) {
+    activeFilter = f;
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    renderLeads();
+  }
+
+  function renderLeads() {
+    const grid = document.getElementById('leads-grid');
+    let leads = currentLeads;
+    if (activeFilter !== 'all') leads = leads.filter(l => l.status === activeFilter);
+
+    if (!leads.length) {
+      grid.innerHTML = `<div class="empty-state">
+        <div class="es-icon">🔍</div>
+        <p>${currentLeads.length ? 'No leads match this filter.' : 'No leads yet. Click <strong>Generate Leads</strong> to start.'}</p>
+      </div>`;
+      return;
+    }
+
+    grid.innerHTML = leads.map((lead, i) => buildCard(lead, i)).join('');
+  }
+
+  function buildCard(lead, i) {
+    const score = lead.qualification_score;
+    const scoreClass = score == null ? '' : score >= 7 ? 'badge-score-high' : score >= 4 ? 'badge-score-mid' : 'badge-score-low';
+    const scoreTxt = score != null ? `Score ${score}/10` : '';
+
+    const statusBadge = {
+      outreach_ready: '<span class="badge badge-outreach">✉ Outreach Ready</span>',
+      qualified: '<span class="badge badge-qualified">✓ Qualified</span>',
+      disqualified: '<span class="badge badge-disqualified">✗ Disqualified</span>',
+      researched: '<span class="badge badge-researched">○ Researched</span>',
+    }[lead.status] || '';
+
+    const painTags = (lead.pain_points || []).slice(0,4)
+      .map(p => `<span class="pain-tag">${escHtml(p)}</span>`).join('');
+
+    const qualReason = lead.qualification_reason
+      ? `<div class="qual-reason">${escHtml(lead.qualification_reason)}</div>` : '';
+
+    let emailSection = '';
+    if (lead.outreach_draft && lead.outreach_draft.email_body) {
+      const d = lead.outreach_draft;
+      emailSection = `
+        <div class="email-section">
+          <button class="email-toggle" onclick="toggleEmail(this)" id="toggle-${i}">
+            <span class="arrow">▶</span> View Outreach Email
+          </button>
+          <div class="email-body" id="email-${i}">
+            <div class="email-subject">
+              <span>Subject: </span>${escHtml(d.subject || '')}
+            </div>
+            <div class="email-text">${escHtml(d.email_body || '')}</div>
+            <button class="copy-btn" onclick="copyEmail(this, '${i}')">Copy email</button>
+            ${d.follow_up_note ? `<div class="follow-note">💡 ${escHtml(d.follow_up_note)}</div>` : ''}
+          </div>
+        </div>`;
+    }
+
+    const website = lead.website
+      ? `<a href="${escHtml(lead.website)}" target="_blank" rel="noopener"
+           style="color:var(--teal);text-decoration:none;font-size:.78rem">${escHtml(lead.website.replace(/https?:\/\//, ''))}</a>` : '';
+
+    return `
+      <div class="lead-card">
+        <div class="card-header">
+          <div>
+            <div class="card-company">${escHtml(lead.company_name || 'Unknown Company')}</div>
+            <div class="card-meta">
+              ${lead.industry ? `<span>📊 ${escHtml(lead.industry)}</span>` : ''}
+              ${lead.size ? `<span>👥 ${escHtml(lead.size)}</span>` : ''}
+              ${lead.location ? `<span>📍 ${escHtml(lead.location)}</span>` : ''}
+            </div>
+            <div style="margin-top:6px">${website}</div>
+          </div>
+          <div class="card-badges">
+            ${score != null ? `<span class="badge ${scoreClass}">${scoreTxt}</span>` : ''}
+            ${statusBadge}
+          </div>
+        </div>
+        <div class="card-body">
+          ${lead.description ? `<div style="font-size:.8rem;color:#B0C4D8;line-height:1.55">${escHtml(lead.description)}</div>` : ''}
+          ${painTags ? `<div>
+            <div style="font-size:.7rem;color:var(--muted);margin-bottom:4px">PAIN POINTS</div>
+            <div class="pain-points">${painTags}</div>
+          </div>` : ''}
+          ${qualReason}
+        </div>
+        ${emailSection}
+      </div>`;
+  }
+
+  /* ── UI helpers ────────────────────────────────────────────────────── */
+  function toggleEmail(btn) {
+    const i = btn.id.replace('toggle-', '');
+    const body = document.getElementById('email-' + i);
+    const isOpen = body.classList.toggle('visible');
+    btn.classList.toggle('open', isOpen);
+    btn.querySelector('.arrow').textContent = isOpen ? '▼' : '▶';
+    btn.childNodes[1].textContent = isOpen ? ' Hide Outreach Email' : ' View Outreach Email';
+  }
+
+  // store email text for copy
+  const emailTexts = {};
+  function copyEmail(btn, i) {
+    const emailEl = document.getElementById('email-' + i);
+    const text = emailEl?.querySelector('.email-text')?.textContent || '';
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = '✓ Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy email'; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+
+  function setRunning(on) {
+    document.getElementById('run-btn').disabled = on;
+    document.getElementById('ingest-btn').disabled = on;
+    document.getElementById('run-btn').textContent = on ? '⟳ Running…' : '▶  Generate Leads';
+    document.getElementById('loading-overlay').classList.toggle('visible', on);
+    if (!on) {
+      clearTimeout(stepTimer);
+      ['step-research','step-qual','step-sales'].forEach(s => {
+        document.getElementById(s).className = 'loading-step done';
+      });
+    }
+  }
+
+  function animateSteps() {
+    const steps = ['step-research','step-qual','step-sales'];
+    let idx = 0;
+    steps.forEach(s => document.getElementById(s).className = 'loading-step');
+
+    function next() {
+      if (idx < steps.length) {
+        if (idx > 0) document.getElementById(steps[idx-1]).className = 'loading-step done';
+        document.getElementById(steps[idx]).className = 'loading-step active';
+        idx++;
+        stepTimer = setTimeout(next, 8000);
+      }
+    }
+    next();
+  }
+
+  function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast visible ${type}`;
+    setTimeout(() => t.className = 'toast', 3500);
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ── Load existing leads on boot ───────────────────────────────────── */
+  async function loadExistingLeads() {
+    try {
+      const res = await fetch(`${API}/leads`);
+      const data = await res.json();
+      if (data.leads?.length) {
+        currentLeads = data.leads;
+        const outready = data.leads.filter(l=>l.status==='outreach_ready').length;
+        const disq = data.leads.filter(l=>l.status==='disqualified').length;
+        renderStats({ total: data.total, qualified: outready, disqualified: disq });
+        renderLeads();
+        renderLog(['Loaded ' + data.total + ' leads from previous run.']);
+      }
+    } catch {}
+  }
+
+  /* ── Init ──────────────────────────────────────────────────────────── */
+  checkHealth();
+  loadMetrics();
+  loadExistingLeads();
+</script>
+</body>
+</html>

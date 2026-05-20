@@ -103,32 +103,31 @@ curl http://localhost:8000/health
 
 ## [3:45 – 4:15] RAG Knowledge Ingestion
 
-**Show:** Terminal
-
-```bash
-curl -X POST http://localhost:8000/ingest-knowledge
-```
+**Show:** Dashboard → click **"Re-ingest RAG Knowledge"** button in the sidebar.
 
 **Say:**
 > "Before generating leads, we build the RAG knowledge base by scraping HumanMaximizer.com.
-> This endpoint is idempotent — if the vector store already exists, it skips re-ingestion.
-> The scraper fetches each page, chunks it, embeds it, and stores in ChromaDB.
-> We do this once at startup."
+> The button is idempotent — if the vector store already exists, it skips and shows a message.
+> The scraper fetches each page, chunks it into 500-token segments, embeds with all-MiniLM-L6-v2,
+> and stores in ChromaDB. We do this once. Every subsequent pipeline run queries this store."
 
 ---
 
 ## [4:15 – 6:30] Live Pipeline Run
 
-**Show:** Open Swagger UI at `http://localhost:8000/docs`
+**Show:** Dashboard at `http://localhost:8000`
 
 **Say:**
-> "The main endpoint — POST /generate-leads — takes a keyword describing the target market.
-> Let me run it with 'manufacturing company India 500 employees HRMS'."
+> "This is the lead generation dashboard — a single-page app built into the system.
+> No Swagger, no JSON scrolling. The keyword is pre-filled. Let me hit Generate Leads."
 
-**Navigate to POST /generate-leads, click Try It Out, enter keyword, Execute.**
+**Click the teal "Generate Leads" button.**
 
-**While waiting (~25 seconds), say:**
-> "What's happening right now:
+**While the animated loading overlay shows (~25 seconds), say:**
+> "The loading overlay shows all three agents progressing in sequence — you can watch
+> the Research Agent step light up first, then Qualification, then Sales.
+>
+> What's happening under the hood:
 > 1. Research Agent searches DuckDuckGo for Indian manufacturing companies
 > 2. For each result, it scrapes the website and calls Llama 3.1 to extract structured data
 > 3. Redis deduplication ensures we don't process the same company twice
@@ -136,32 +135,22 @@ curl -X POST http://localhost:8000/ingest-knowledge
 >    product context from ChromaDB and scores the lead
 > 5. Leads scoring ≥5.0 go to the Sales Agent for outreach generation"
 
-**Show the response and highlight:**
+**When the overlay closes, point to the dashboard and say:**
+> "Five unique leads — all five qualified with a score of 8.5 out of 10. Zero disqualified.
+> Five personalized outreach emails generated. The pipeline log on the left shows every
+> agent's decision. The metrics strip shows average latency — about 17 seconds end-to-end."
 
-```json
-{
-  "summary": {
-    "total": 5,
-    "qualified": 4,
-    "disqualified": 0
-  },
-  "pipeline_log": [
-    "Research Agent: Found 5 leads",
-    "Qualification Agent: 5 qualified, 0 disqualified",
-    "Sales Agent: 4 outreach drafts generated"
-  ]
-}
-```
+**Click "View Outreach Email" on any card.**
+> "Here's the generated outreach for Zomato — it opens with something specific to their
+> gig worker pain points, connects it to HumanMaximizer's HRMS capabilities using only
+> content retrieved from our RAG store, and ends with a low-friction demo CTA.
+> The hallucination confidence score tells you how grounded this email is in actual
+> product knowledge. There's also a copy button — one click to grab the email."
 
-**Say:** "Five unique leads found, five qualified with an average score of 8.5 out of 10,
-four personalized outreach emails generated."
-
-**Scroll to a lead and show the outreach email:**
-> "Look at this email — it opens with something specific to the company's pain point,
-> connects it to HumanMaximizer's capabilities using only content from our RAG store,
-> and ends with a low-friction CTA. The `follow_up_note` is an internal note the agent
-> generated explaining why it chose that angle. The `hallucination_confidence` score
-> tells you how grounded this email is in our actual product knowledge."
+**Show the filter chips.**
+> "I can filter by status — Outreach Ready shows only the leads ready to contact.
+> Qualified shows leads that scored well but where email generation failed.
+> This maps directly to a real sales workflow."
 
 ---
 

@@ -17,6 +17,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ./data:/app/data
+      - ./static:/app/static
       - ./agents:/app/agents
       - ./api:/app/api
       - ./cache:/app/cache

@@ -2,6 +2,7 @@
 FastAPI Application
 -------------------
 Endpoints:
+  GET  /                  → Lead generation dashboard (UI)
   POST /generate-leads    → Run full multi-agent pipeline
   GET  /leads             → Retrieve stored leads
   POST /ingest-knowledge  → Build RAG knowledge base
@@ -13,7 +14,8 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
 
@@ -34,9 +36,9 @@ setup_langsmith()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: ensure required directories exist before accepting requests."""
-    from pathlib import Path
     Path("./data/logs").mkdir(parents=True, exist_ok=True)
     Path("./data").mkdir(parents=True, exist_ok=True)
+    Path("./static").mkdir(parents=True, exist_ok=True)
     yield
 
 
@@ -58,6 +60,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static assets (dashboard HTML)
+_static_dir = Path(__file__).parent.parent / "static"
+if _static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 
 # ── Global Exception Handlers ─────────────────────────────────────────────────
@@ -96,6 +103,15 @@ class LeadRequest(BaseModel):
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.get("/", include_in_schema=False)
+def dashboard():
+    """Serve the lead generation dashboard UI."""
+    html_path = Path(__file__).parent.parent / "static" / "dashboard.html"
+    if html_path.exists():
+        return FileResponse(str(html_path), media_type="text/html")
+    return JSONResponse({"message": "Dashboard not found. See /docs for API."})
+
 
 @app.get("/health")
 def health():
