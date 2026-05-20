@@ -186,7 +186,7 @@ When fine-tuning would actually help:
 
 Two-tier observability strategy:
 
-**LangSmith (LLM-level tracing)** — set `LANGCHAIN_API_KEY` in `.env` to enable:
+**LangSmith (LLM-level tracing)** (set `LANGCHAIN_API_KEY` in `.env` to enable):
 - Every LLM call traced automatically (prompt, response, token count, latency)
 - Agents use `langchain_groq.ChatGroq`, a LangChain Runnable, so tracing is zero-config
 - Full LangGraph pipeline run visible as a parent trace with per-agent child spans
