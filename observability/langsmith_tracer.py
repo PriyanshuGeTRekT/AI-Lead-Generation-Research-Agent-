@@ -1,5 +1,5 @@
 """
-Observability — LangSmith + Custom Metrics
+Observability: LangSmith + Custom Metrics
 -------------------------------------------
 Two-tier observability strategy:
 
@@ -19,7 +19,7 @@ Tier 2: Custom Metrics (Business-level)
 Architectural Decision:
   LangSmith answers "what did the agent decide and why?"
   Custom metrics answer "is the business outcome improving?"
-  Both are needed — one without the other gives incomplete visibility.
+  Both are needed. One without the other gives incomplete visibility.
 
   For production, custom metrics would feed into:
   - Datadog / Prometheus for dashboards

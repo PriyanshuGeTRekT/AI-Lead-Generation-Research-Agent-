@@ -46,7 +46,7 @@ app = FastAPI(
     lifespan=lifespan,
     title="AI Lead Generation API",
     description=(
-        "Multi-agent HRMS lead generation — Supervisor pattern (LangGraph) "
+        "Multi-agent HRMS lead generation, Supervisor pattern (LangGraph) "
         "+ RAG (ChromaDB + HuggingFace) + Groq (Llama 3)"
     ),
     version="1.0.0",
@@ -139,7 +139,7 @@ def ingest_knowledge():
     """
     Scrape humanmaximizer.com and build the RAG vector store.
     Must be called once before /generate-leads.
-    Safe to call multiple times — skips if already ingested.
+    Safe to call multiple times, skips if already ingested.
     """
     try:
         from rag.scraper import build_corpus

@@ -2,7 +2,7 @@
 
 An AI-powered lead generation system for HRMS software sales, built with a **Supervisor multi-agent architecture** using LangGraph, Groq (open-source LLMs), and RAG.
 
-**Live dashboard** at `http://localhost:8000` — no curl required.
+**Live dashboard** at `http://localhost:8000` (no curl required).
 
 ![Dashboard showing 5 lead cards with score badges, pain points, and outreach emails](https://img.shields.io/badge/UI-Dashboard-teal) ![API](https://img.shields.io/badge/API-FastAPI-green) ![LLM](https://img.shields.io/badge/LLM-Llama%203.1-blue) ![Redis](https://img.shields.io/badge/Cache-Redis-red)
 
@@ -44,7 +44,7 @@ An AI-powered lead generation system for HRMS software sales, built with a **Sup
 
 ### 1. Prerequisites
 - Docker & Docker Compose installed
-- Free Groq API key → [console.groq.com](https://console.groq.com)
+- Free Groq API key from [console.groq.com](https://console.groq.com)
 
 ### 2. Setup
 ```bash
@@ -82,9 +82,9 @@ curl http://localhost:8000/leads?status=outreach_ready
 ```
 
 ### Dashboard UI
-Open **http://localhost:8000** in your browser — a full lead generation dashboard with:
-- Live pipeline execution with animated step indicators (Research → Qualify → Sales)
-- Lead cards with score badges, pain point tags, qualification reasoning
+Open **http://localhost:8000** in your browser for a full lead generation dashboard with:
+- Live pipeline execution with animated step indicators (Research -> Qualify -> Sales)
+- Lead cards with score badges, pain point tags, and qualification reasoning
 - Expandable outreach emails with one-click copy
 - Filter by status: Outreach Ready / Qualified / Disqualified / Researched
 - Real-time metrics: latency, lead counts, avg score
@@ -95,11 +95,11 @@ Visit: http://localhost:8000/docs (Swagger UI auto-generated)
 
 ## Agent Flow
 
-1. **Research Agent** — Takes a keyword, searches DuckDuckGo, scrapes company websites, uses Llama 3 to extract structured lead info (company, size, decision makers, pain points)
+1. **Research Agent**: takes a keyword, searches DuckDuckGo, scrapes company websites, and uses Llama 3 to extract structured lead info (company, size, decision makers, pain points)
 
-2. **Qualification Agent** — Scores each lead 0–10 using RAG-grounded LLM reasoning. Retrieves relevant HRMS product context from ChromaDB to match prospect needs against product capabilities. Leads scoring ≥5 proceed, others are discarded.
+2. **Qualification Agent**: scores each lead 0 to 10 using RAG-grounded LLM reasoning. It retrieves relevant HRMS product context from ChromaDB to match prospect needs against product capabilities. Leads scoring 5 or above move forward, the rest get discarded.
 
-3. **Sales Agent** — Generates personalized outreach emails for qualified leads. Uses RAG to ensure product claims are grounded in actual HumanMaximizer features, not hallucinated.
+3. **Sales Agent**: generates personalized outreach emails for qualified leads. Uses RAG to make sure product claims are grounded in actual HumanMaximizer features, not made up.
 
 ## RAG Pipeline
 
@@ -116,10 +116,10 @@ humanmaximizer.com → Scrape → Chunk (500 tokens, 50 overlap)
 ## Model Selection
 
 Using **Llama 3 8B** (open-source, Meta) via **Groq** for inference:
-- Open-source model — satisfies the requirement fully
+- Open-source model (satisfies the requirement fully)
 - Groq is just the inference engine (LPU hardware), not the model provider
-- 8192 context window — enough for lead + RAG context
-- Fast inference via Groq's LPU (< 1s response)
+- 8192 context window (enough for lead + RAG context)
+- Fast inference via Groq's LPU (under 1s response)
 - Free tier: 14,400 requests/day
 - Upgrade path: `llama3-70b-8192` for higher quality, `mixtral-8x7b-32768` for longer context
 
@@ -133,7 +133,7 @@ Using **Llama 3 8B** (open-source, Meta) via **Groq** for inference:
 | Mixtral 8x7B | ~26GB | ✅ Best | ✅ Best | Needs GPU workstation |
 | Gemma 2 9B | ~7GB | ⚠️ OK | ⚠️ Good | Weaker JSON reliability |
 
-Llama 3 8B wins on the balance of **JSON extraction** (Research Agent), **multi-criteria reasoning** (Qualification Agent), and **creative writing** (Sales Agent).
+Llama 3 8B hits the right balance of **JSON extraction** (Research Agent), **multi-criteria reasoning** (Qualification Agent), and **creative writing** (Sales Agent).
 
 ### Running Locally with Ollama (Groq swap-out)
 
@@ -142,7 +142,7 @@ To run fully offline without Groq, swap to Ollama in 3 steps:
 **Step 1: Install Ollama & pull the model**
 ```bash
 # Install: https://ollama.com
-ollama pull llama3       # ~4.7GB — same model, local inference
+ollama pull llama3       # ~4.7GB (same model, local inference)
 # or for RAM-constrained machines:
 ollama pull mistral      # ~4.1GB
 ```
@@ -165,28 +165,28 @@ GROQ_MODEL=llama3   # just update the model name
 ```
 
 Minimum hardware for local run:
-- **8GB RAM** → Mistral 7B (quantized)
-- **16GB RAM** → Llama 3 8B (recommended)
-- **GPU (8GB VRAM)** → Llama 3 8B at full speed
+- **8GB RAM**: Mistral 7B (quantized)
+- **16GB RAM**: Llama 3 8B (recommended)
+- **GPU (8GB VRAM)**: Llama 3 8B at full speed
 
 ## Fine-Tuning Strategy
 
-Fine-tuning is **not needed for v1** — few-shot prompting with RAG handles qualification well.
+Fine-tuning is not needed for v1. Few-shot prompting with RAG handles qualification well enough for this use case.
 
-When fine-tuning would help:
+When fine-tuning would actually help:
 - After collecting 500+ human-labeled lead qualification examples
 - Dataset format: `{"prompt": "<lead_info>", "completion": "<score + reason>"}`
 - Method: QLoRA with Unsloth (4-bit quantization, ~10GB VRAM)
-- Base model: Llama 3 8B → fine-tune on internal sales qualification history
+- Base model: Llama 3 8B, fine-tuned on internal sales qualification history
 
 ## Observability
 
 - **LangSmith** integration for agent traces (set `LANGCHAIN_API_KEY` in `.env`)
-- **Dashboard** at `GET /` — pipeline log, latency, lead quality, live run status
-- **Metrics API** at `GET /metrics` — JSONL-backed aggregated pipeline stats
+- **Dashboard** at `GET /`: pipeline log, latency, lead quality, live run status
+- **Metrics API** at `GET /metrics`: JSONL-backed aggregated pipeline stats
 - Structured JSON logs in `data/logs/app.log` with correlation IDs per run
 - Each agent logs decisions to `state["messages"]` (visible in dashboard log panel)
-- Hallucination prevention: RAG grounds all product claims
+- Hallucination prevention via RAG grounding on all product claims
 - Lead quality tracked via `qualification_score` distribution
 
 ## API Reference
@@ -203,8 +203,8 @@ When fine-tuning would help:
 
 ## Scaling
 
-- Each agent is stateless → horizontally scalable
-- ChromaDB → swap for pgvector (PostgreSQL) at scale
+- Each agent is stateless, so horizontal scaling is straightforward
+- ChromaDB can be swapped for pgvector (PostgreSQL) at scale
 - Redis queue for async lead processing
-- Dashboard is a single static HTML file — can be deployed to any CDN
-- Docker → Kubernetes for production deployment
+- Dashboard is a single static HTML file (can be deployed to any CDN)
+- Docker Compose today, Kubernetes when needed

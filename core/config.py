@@ -2,7 +2,7 @@
 Centralized Configuration Management
 -------------------------------------
 Uses Pydantic Settings for type-safe config with env var support.
-All magic strings and constants live here — no hardcoding across the codebase.
+All magic strings and constants live here, no hardcoding across the codebase.
 
 Architectural Decision:
   Centralizing config via Pydantic Settings means:
@@ -68,5 +68,5 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    """Cached settings instance — loaded once at startup."""
+    """Cached settings instance, loaded once at startup."""
     return Settings()

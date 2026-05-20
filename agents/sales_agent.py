@@ -18,7 +18,7 @@ settings = get_settings()
 
 OUTREACH_PROMPT = """You are a B2B sales copywriter for HumanMaximizer, an HRMS software company.
 
-Our product capabilities (use ONLY what is stated below — do not invent features):
+Our product capabilities (use ONLY what is stated below, do not invent features):
 {rag_context}
 
 Prospect company details:
@@ -29,7 +29,7 @@ Write a personalized cold outreach email that:
 2. Mentions a specific pain point they likely face
 3. Connects our HRMS solution to that pain point using ONLY the product info above
 4. Has a clear, low-friction CTA (demo, quick call)
-5. Is concise — max 150 words
+5. Is concise (max 150 words)
 
 Respond with JSON ONLY:
 {{
@@ -82,7 +82,7 @@ class SalesAgent(BaseAgent):
                 )
                 result = self.parse_json_response(raw)
 
-                # Hallucination guard — strict for outreach (don't claim features we don't have)
+                # Hallucination guard, strict for outreach (don't claim features we don't have)
                 guard = guard_llm_response(
                     response_text=result.get("email_body", ""),
                     rag_context=rag_context,
@@ -110,10 +110,10 @@ class SalesAgent(BaseAgent):
                 lead["outreach_draft"] = None
 
         # leads were mutated in-place above (outreach_draft + status updated per lead).
-        # Return the same list — no reconstruction needed (avoids double-counting).
+        # Return the same list, no reconstruction needed (avoids double-counting).
         outreach_count = sum(1 for l in leads if l.get("outreach_draft"))
 
-        self.log.info(f"Sales Agent complete — {outreach_count} outreach drafts generated")
+        self.log.info(f"Sales Agent complete: {outreach_count} outreach drafts generated")
 
         return {
             **state,

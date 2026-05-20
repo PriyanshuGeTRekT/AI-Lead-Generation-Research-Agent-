@@ -8,7 +8,7 @@ Structured exception hierarchy gives us:
 
 Architectural Decision:
   Rather than catching generic Exception everywhere, a typed hierarchy
-  lets the supervisor route failures correctly — e.g., a WebSearchError
+  lets the supervisor route failures correctly. For example, a WebSearchError
   can trigger a retry, while a PromptInjectionError should hard-stop.
 """
 
@@ -27,7 +27,7 @@ class LLMError(LeadGenBaseError):
     """LLM API call failed."""
 
 class LLMRateLimitError(LLMError):
-    """Groq/LLM rate limit hit — trigger exponential backoff."""
+    """Groq/LLM rate limit hit, triggers exponential backoff."""
 
 class LLMResponseParseError(LLMError):
     """LLM returned non-JSON or malformed response."""
@@ -45,7 +45,7 @@ class RAGNotReadyError(RAGError):
     """Knowledge base hasn't been ingested yet."""
 
 class RAGLowConfidenceError(RAGError):
-    """Retrieved context has poor relevance score — risk of hallucination."""
+    """Retrieved context has poor relevance score, risk of hallucination."""
 
 
 # ── Web / Research Errors ─────────────────────────────────────────────────────
@@ -63,7 +63,7 @@ class PromptInjectionError(LeadGenBaseError):
     """Input contains suspected prompt injection patterns."""
 
 class RateLimitExceededError(LeadGenBaseError):
-    """API rate limit exceeded — return 429."""
+    """API rate limit exceeded, returns 429."""
 
 class InputValidationError(LeadGenBaseError):
     """Input failed validation (too long, empty, invalid chars)."""
@@ -75,7 +75,7 @@ class PipelineError(LeadGenBaseError):
     """General pipeline orchestration failure."""
 
 class MaxIterationsError(PipelineError):
-    """Pipeline hit max iteration limit — safety circuit breaker."""
+    """Pipeline hit max iteration limit (safety circuit breaker)."""
 
 class NoCacheError(LeadGenBaseError):
-    """Redis cache miss — not an error, just a signal."""
+    """Redis cache miss. Not an error, just a signal to proceed without cache."""

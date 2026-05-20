@@ -20,7 +20,7 @@ settings = get_settings()
 
 QUALIFICATION_PROMPT = """You are a B2B sales qualification expert for an HRMS software company.
 
-Your product knowledge (from our HRMS product — use ONLY this, do not fabricate features):
+Your product knowledge (from our HRMS product, use ONLY this, do not fabricate features):
 {rag_context}
 
 Company to qualify:
@@ -71,7 +71,7 @@ class QualificationAgent(BaseAgent):
             )
 
             try:
-                # Use BaseAgent's call_llm — gets caching + retry automatically
+                # Use BaseAgent's call_llm (gets caching + retry automatically)
                 raw = self.call_llm(
                     prompt,
                     temperature=settings.llm_temperature_extract,
@@ -112,9 +112,9 @@ class QualificationAgent(BaseAgent):
                 disqualified_leads.append(lead)
 
         # leads were mutated in-place above (status updated per lead).
-        # Return the same list — no reconstruction needed (avoids double-counting).
+        # Return the same list, no reconstruction needed (avoids double-counting).
         self.log.info(
-            f"Qualification complete — {len(qualified_leads)} qualified, "
+            f"Qualification complete: {len(qualified_leads)} qualified, "
             f"{len(disqualified_leads)} disqualified"
         )
 

@@ -3,21 +3,21 @@ Hallucination Guard
 --------------------
 Three-layer hallucination prevention strategy:
 
-Layer 1 — RAG Grounding (retrieval confidence)
+Layer 1: RAG Grounding (retrieval confidence)
   If the vector similarity score is poor (distance > threshold),
   we flag the response as low-confidence rather than letting the
   LLM fabricate product details.
 
-Layer 2 — Output Validation (structural + factual)
+Layer 2: Output Validation (structural + factual)
   LLM output is parsed as strict JSON via Pydantic.
-  Any missing required field = the response is rejected, not silently dropped.
+  Any missing required field means the response is rejected, not silently dropped.
 
-Layer 3 — Self-Consistency Check (LLM-as-judge, optional)
+Layer 3: Self-Consistency Check (LLM-as-judge, optional)
   For high-stakes outputs (outreach emails), a second LLM call
   verifies the first response doesn't contain claims not in the RAG context.
 
 Architectural Decision:
-  RAG alone doesn't prevent hallucinations — the LLM can still ignore
+  RAG alone doesn't prevent hallucinations. The LLM can still ignore
   the context and fabricate. The guard adds:
     - Confidence scoring at retrieval time
     - Structural validation at output time
@@ -89,7 +89,7 @@ def validate_product_claims(text: str, rag_context: str) -> bool:
     """
     for keyword in PRODUCT_CLAIM_KEYWORDS:
         if keyword.lower() in text.lower():
-            # Claim references the product — verify it's in RAG context
+            # Claim references the product, verify it's in RAG context
             if keyword.lower() not in rag_context.lower():
                 return False
     return True

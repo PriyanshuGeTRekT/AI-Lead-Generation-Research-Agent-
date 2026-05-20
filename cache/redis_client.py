@@ -1,5 +1,5 @@
 """
-Redis Client — Caching & Pipeline State
+Redis Client: Caching & Pipeline State
 -----------------------------------------
 Redis serves two roles in this system:
 
@@ -50,7 +50,7 @@ def get_redis() -> Optional[redis.Redis]:
         if _client is not None:
             _client.ping()  # Verify connection is still alive
             return _client
-        # No client yet — try to connect
+        # No client yet, try to connect
         _client = redis.from_url(
             settings.redis_url,
             decode_responses=True,
@@ -114,7 +114,7 @@ def check_rate_limit(client_ip: str, limit: int = None, window: int = 60) -> boo
     Returns True if request is allowed, False if rate limited.
 
     Architectural Decision:
-      Using Redis INCR is atomic — no race conditions vs in-memory counters
+      Using Redis INCR is atomic, so there are no race conditions vs in-memory counters
       when running multiple API server replicas.
     """
     client = get_redis()

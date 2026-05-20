@@ -99,7 +99,7 @@ class ResearchAgent(BaseAgent):
 
                 company_name = lead_data.get("company_name", "")
 
-                # Deduplication — skip if processed in last 24 hours
+                # Deduplication: skip if processed in last 24 hours
                 if is_duplicate_lead(company_name):
                     self.log.info(f"Skipping duplicate lead: {company_name}")
                     continue
@@ -129,7 +129,7 @@ class ResearchAgent(BaseAgent):
                 self.log.error(f"Error processing {url}: {e}")
                 continue
 
-        self.log.info(f"Research complete — {len(new_leads)} leads extracted")
+        self.log.info(f"Research complete: {len(new_leads)} leads extracted")
 
         # Use replace semantics: combine existing leads with newly found ones
         existing_leads = state.get("leads", [])

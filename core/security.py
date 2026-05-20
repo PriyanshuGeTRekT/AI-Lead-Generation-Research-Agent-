@@ -1,5 +1,5 @@
 """
-Security — Input Validation & Prompt Injection Prevention
+Security: Input Validation & Prompt Injection Prevention
 ----------------------------------------------------------
 Attack vectors this module defends against:
 
@@ -20,7 +20,7 @@ Attack vectors this module defends against:
 Architectural Decision:
   Security validation happens at the API boundary (FastAPI middleware),
   before any agent or LLM receives the input.
-  This is the "never trust user input" principle — validate early,
+  This is the "never trust user input" principle: validate early,
   fail loudly, log always.
 """
 import re

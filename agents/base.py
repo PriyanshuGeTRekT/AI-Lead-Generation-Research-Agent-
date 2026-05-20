@@ -10,7 +10,7 @@ All agents inherit from BaseAgent to get:
 
 Architectural Decision:
   Without a base class, each agent reimplements retry logic, logging,
-  and error handling differently — leading to inconsistent behavior
+  and error handling differently, which leads to inconsistent behavior
   and maintenance burden. The base class enforces a contract:
   every agent handles failures the same way, logs the same fields,
   and benefits from caching automatically.
@@ -63,7 +63,7 @@ class BaseAgent(ABC):
         temperature = temperature or settings.llm_temperature_extract
         max_tokens = max_tokens or settings.llm_max_tokens_extract
 
-        # Check cache first — hash the FULL prompt to distinguish per-company calls
+        # Check cache first. Hash the FULL prompt to distinguish per-company calls.
         # Bug fix: prompt[:200] was always the static preamble, causing cache collisions
         ck = cache_key("llm", self.name, prompt, str(temperature))
         if use_cache:

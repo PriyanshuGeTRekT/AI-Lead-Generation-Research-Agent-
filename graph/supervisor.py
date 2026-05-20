@@ -3,7 +3,7 @@ Supervisor Graph (LangGraph)
 ----------------------------
 Orchestrates the 3 agents using a StateGraph with conditional routing.
 
-Pattern: Supervisor — central orchestrator decides which agent runs next
+Pattern: Supervisor (central orchestrator decides which agent runs next)
 by reading the `next` field from shared LeadState.
 
 Flow:
@@ -33,14 +33,14 @@ settings = get_settings()
 
 def route(state: LeadState) -> str:
     """
-    Supervisor routing function — reads state.next to decide next node.
+    Supervisor routing function. Reads state.next to decide next node.
     Circuit breaker: hard-stop if iteration limit exceeded.
     """
     next_node = state.get("next", "END")
 
     if state.get("iteration", 0) > settings.max_iterations:
         logger.bind(agent="supervisor", correlation_id=state.get("correlation_id", "?")).warning(
-            "Max iterations exceeded — circuit breaker triggered"
+            "Max iterations exceeded, circuit breaker triggered"
         )
         return END
 
