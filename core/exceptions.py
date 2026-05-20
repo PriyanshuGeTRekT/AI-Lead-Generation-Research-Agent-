@@ -41,9 +41,6 @@ class LLMHallucinationError(LLMError):
 class RAGError(LeadGenBaseError):
     """Vector store operation failed."""
 
-class RAGNotReadyError(RAGError):
-    """Knowledge base hasn't been ingested yet."""
-
 class RAGLowConfidenceError(RAGError):
     """Retrieved context has poor relevance score, risk of hallucination."""
 
