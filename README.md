@@ -1,0 +1,181 @@
+# AI Lead Generation & Research Agent
+
+An AI-powered lead generation system for HRMS software sales, built with a **Supervisor multi-agent architecture** using LangGraph, Groq (open-source LLMs), and RAG.
+
+## Architecture
+
+```
+                    ┌─────────────────┐
+                    │   Supervisor    │  ← LangGraph StateGraph
+                    │  (Orchestrator) │
+                    └────────┬────────┘
+                             │ routes based on state
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+     ┌────────────────┐  ┌──────────┐  ┌─────────┐
+     │ Research Agent │  │  Qualify │  │  Sales  │
+     │ Web search +   │  │  Agent   │  │  Agent  │
+     │ LLM extraction │  │ RAG+LLM  │  │ RAG+LLM │
+     └────────────────┘  └──────────┘  └─────────┘
+              │                │              │
+              ▼                ▼              ▼
+     Find companies      Score 0-10     Draft outreach
+     Extract info        ≥5 → Sales     emails
+                         <5 → Discard
+```
+
+## Tech Stack
+
+| Component | Technology | Why |
+|-----------|-----------|-----|
+| Agent Orchestration | LangGraph | Conditional routing, shared state |
+| LLM | Groq (Llama 3 / Mixtral) | Open-source, fast inference |
+| Vector Store | ChromaDB | Persistent, local, no infra needed |
+| Embeddings | sentence-transformers (all-MiniLM-L6-v2) | Open-source, HuggingFace |
+| Web Search | DuckDuckGo Search | Free, no API key |
+| API | FastAPI | Async, auto-docs |
+| Containerization | Docker | Portable deployment |
+
+## Quick Start
+
+### 1. Prerequisites
+- Docker & Docker Compose installed
+- Free Groq API key → [console.groq.com](https://console.groq.com)
+
+### 2. Setup
+```bash
+git clone <repo>
+cd ai-lead-gen
+cp .env.example .env
+# Edit .env and add your GROQ_API_KEY
+```
+
+### 3. Run
+```bash
+docker compose up --build
+```
+
+### 4. Build Knowledge Base (Run Once)
+```bash
+curl -X POST http://localhost:8000/ingest-knowledge
+```
+This scrapes humanmaximizer.com and builds the RAG vector store.
+
+### 5. Generate Leads
+```bash
+curl -X POST http://localhost:8000/generate-leads \
+  -H "Content-Type: application/json" \
+  -d '{"keyword": "manufacturing company India 200 employees"}'
+```
+
+### 6. View Results
+```bash
+# All leads
+curl http://localhost:8000/leads
+
+# Only outreach-ready leads
+curl http://localhost:8000/leads?status=outreach_ready
+```
+
+### API Docs
+Visit: http://localhost:8000/docs (Swagger UI auto-generated)
+
+## Agent Flow
+
+1. **Research Agent** — Takes a keyword, searches DuckDuckGo, scrapes company websites, uses Llama 3 to extract structured lead info (company, size, decision makers, pain points)
+
+2. **Qualification Agent** — Scores each lead 0–10 using RAG-grounded LLM reasoning. Retrieves relevant HRMS product context from ChromaDB to match prospect needs against product capabilities. Leads scoring ≥5 proceed, others are discarded.
+
+3. **Sales Agent** — Generates personalized outreach emails for qualified leads. Uses RAG to ensure product claims are grounded in actual HumanMaximizer features, not hallucinated.
+
+## RAG Pipeline
+
+```
+humanmaximizer.com → Scrape → Chunk (500 tokens, 50 overlap)
+                                  ↓
+                    HuggingFace Embeddings (all-MiniLM-L6-v2)
+                                  ↓
+                    ChromaDB (cosine similarity index)
+                                  ↓
+                    Semantic retrieval at qualification & outreach
+```
+
+## Model Selection
+
+Using **Llama 3 8B** (open-source, Meta) via **Groq** for inference:
+- Open-source model — satisfies the requirement fully
+- Groq is just the inference engine (LPU hardware), not the model provider
+- 8192 context window — enough for lead + RAG context
+- Fast inference via Groq's LPU (< 1s response)
+- Free tier: 14,400 requests/day
+- Upgrade path: `llama3-70b-8192` for higher quality, `mixtral-8x7b-32768` for longer context
+
+### Why Llama 3 over other open-source models?
+
+| Model | RAM | JSON | Reasoning | Verdict |
+|-------|-----|------|-----------|---------|
+| **Llama 3 8B** ✅ | ~6GB | ✅ Very good | ✅ Best in class | **Our choice** |
+| Mistral 7B | ~5GB | ✅ Excellent | ⚠️ Good | Best if RAM < 8GB |
+| Phi-3 Mini 3.8B | ~3GB | ⚠️ Struggles | ❌ Weak | Too small for pipeline |
+| Mixtral 8x7B | ~26GB | ✅ Best | ✅ Best | Needs GPU workstation |
+| Gemma 2 9B | ~7GB | ⚠️ OK | ⚠️ Good | Weaker JSON reliability |
+
+Llama 3 8B wins on the balance of **JSON extraction** (Research Agent), **multi-criteria reasoning** (Qualification Agent), and **creative writing** (Sales Agent).
+
+### Running Locally with Ollama (Groq swap-out)
+
+To run fully offline without Groq, swap to Ollama in 3 steps:
+
+**Step 1: Install Ollama & pull the model**
+```bash
+# Install: https://ollama.com
+ollama pull llama3       # ~4.7GB — same model, local inference
+# or for RAM-constrained machines:
+ollama pull mistral      # ~4.1GB
+```
+
+**Step 2: Swap the LLM client in each agent**
+```python
+# Before (Groq):
+from groq import Groq
+client = Groq(api_key=os.environ["GROQ_API_KEY"])
+response = client.chat.completions.create(model="llama-3.1-8b-instant", ...)
+
+# After (Ollama):
+import ollama
+response = ollama.chat(model="llama3", messages=[...])
+```
+
+**Step 3: Remove GROQ_API_KEY from .env**
+```bash
+GROQ_MODEL=llama3   # just update the model name
+```
+
+Minimum hardware for local run:
+- **8GB RAM** → Mistral 7B (quantized)
+- **16GB RAM** → Llama 3 8B (recommended)
+- **GPU (8GB VRAM)** → Llama 3 8B at full speed
+
+## Fine-Tuning Strategy
+
+Fine-tuning is **not needed for v1** — few-shot prompting with RAG handles qualification well.
+
+When fine-tuning would help:
+- After collecting 500+ human-labeled lead qualification examples
+- Dataset format: `{"prompt": "<lead_info>", "completion": "<score + reason>"}`
+- Method: QLoRA with Unsloth (4-bit quantization, ~10GB VRAM)
+- Base model: Llama 3 8B → fine-tune on internal sales qualification history
+
+## Observability
+
+- **LangSmith** integration for agent traces (set `LANGCHAIN_API_KEY` in `.env`)
+- Each agent logs decisions to `state["messages"]`
+- Hallucination prevention: RAG grounds all product claims
+- Lead quality tracked via `qualification_score` distribution
+
+## Scaling
+
+- Each agent is stateless → horizontally scalable
+- ChromaDB → swap for pgvector (PostgreSQL) at scale
+- Redis queue for async lead processing
+- Docker → Kubernetes for production deployment
