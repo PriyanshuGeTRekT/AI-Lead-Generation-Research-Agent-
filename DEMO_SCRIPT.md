@@ -169,9 +169,13 @@ curl http://localhost:8000/metrics
 > agent's action in a single run, end to end.
 >
 > For production, you'd pipe this to Datadog or CloudWatch since logs are JSON-structured.
-> I also integrated optional LangSmith tracing. If you set a LANGCHAIN_API_KEY,
-> every LangGraph invocation appears in the LangSmith dashboard with full agent trace,
-> token counts, and latency breakdown per node."
+>
+> And here's something worth showing. All three agents use LangChain's ChatGroq wrapper
+> instead of the raw Groq SDK. That one decision means LangSmith gets full visibility
+> into every single LLM call automatically. Set LANGCHAIN_API_KEY in the env and you get
+> the full LangGraph run as a parent trace, with each agent as a child span, and inside
+> each span every prompt we sent, every response we got back, token counts, and latency.
+> No extra instrumentation code needed anywhere."
 
 **Show:** `docker logs ai-lead-gen --tail 20`
 
@@ -224,11 +228,13 @@ curl http://localhost:8000/metrics
 | Component | Technology |
 |-----------|-----------|
 | LLM | Llama 3.1 8B via Groq API |
+| LLM Client | langchain-groq (ChatGroq) |
 | Orchestration | LangGraph StateGraph |
 | RAG Vector Store | ChromaDB |
 | Embeddings | all-MiniLM-L6-v2 (HuggingFace) |
 | Caching / Rate Limiting | Redis 7 Alpine |
 | API Framework | FastAPI |
 | Logging | Loguru (structured JSON) |
-| Observability | LangSmith + custom JSONL metrics |
+| LLM Tracing | LangSmith (auto via ChatGroq) |
+| Pipeline Metrics | Custom JSONL + /metrics API |
 | Containerization | Docker Compose |

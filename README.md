@@ -33,11 +33,13 @@ An AI-powered lead generation system for HRMS software sales, built with a **Sup
 | Component | Technology | Why |
 |-----------|-----------|-----|
 | Agent Orchestration | LangGraph | Conditional routing, shared state |
-| LLM | Groq (Llama 3 / Mixtral) | Open-source, fast inference |
+| LLM | Llama 3.1 8B via Groq | Open-source model, fast LPU inference |
+| LLM Client | langchain-groq (ChatGroq) | LangChain wrapper enables full LangSmith tracing |
 | Vector Store | ChromaDB | Persistent, local, no infra needed |
 | Embeddings | sentence-transformers (all-MiniLM-L6-v2) | Open-source, HuggingFace |
 | Web Search | DuckDuckGo Search | Free, no API key |
 | API | FastAPI | Async, auto-docs |
+| Observability | LangSmith + custom JSONL metrics | LLM-level + business-level tracing |
 | Containerization | Docker | Portable deployment |
 
 ## Quick Start
@@ -147,21 +149,22 @@ ollama pull llama3       # ~4.7GB (same model, local inference)
 ollama pull mistral      # ~4.1GB
 ```
 
-**Step 2: Swap the LLM client in each agent**
+**Step 2: Swap the LLM client in `agents/base.py`**
 ```python
-# Before (Groq):
-from groq import Groq
-client = Groq(api_key=os.environ["GROQ_API_KEY"])
-response = client.chat.completions.create(model="llama-3.1-8b-instant", ...)
+# Before (ChatGroq via Groq API):
+from langchain_groq import ChatGroq
+llm = ChatGroq(api_key=settings.groq_api_key, model=settings.groq_model, ...)
 
-# After (Ollama):
-import ollama
-response = ollama.chat(model="llama3", messages=[...])
+# After (ChatOllama via local Ollama):
+from langchain_ollama import ChatOllama
+llm = ChatOllama(model="llama3", temperature=temperature)
 ```
+Everything else (retry logic, caching, LangSmith tracing) stays the same since
+both are LangChain Runnables.
 
-**Step 3: Remove GROQ_API_KEY from .env**
+**Step 3: Update .env**
 ```bash
-GROQ_MODEL=llama3   # just update the model name
+GROQ_MODEL=llama3   # used as a label only; ChatOllama ignores GROQ_API_KEY
 ```
 
 Minimum hardware for local run:
@@ -181,10 +184,18 @@ When fine-tuning would actually help:
 
 ## Observability
 
-- **LangSmith** integration for agent traces (set `LANGCHAIN_API_KEY` in `.env`)
+Two-tier observability strategy:
+
+**LangSmith (LLM-level tracing)** — set `LANGCHAIN_API_KEY` in `.env` to enable:
+- Every LLM call traced automatically (prompt, response, token count, latency)
+- Agents use `langchain_groq.ChatGroq`, a LangChain Runnable, so tracing is zero-config
+- Full LangGraph pipeline run visible as a parent trace with per-agent child spans
+- Hallucination warnings surfaced as events on the trace
+
+**Custom metrics (business-level)**:
 - **Dashboard** at `GET /`: pipeline log, latency, lead quality, live run status
 - **Metrics API** at `GET /metrics`: JSONL-backed aggregated pipeline stats
-- Structured JSON logs in `data/logs/app.log` with correlation IDs per run
+- Structured JSON logs in `data/logs/app.log` with 8-char correlation IDs per run
 - Each agent logs decisions to `state["messages"]` (visible in dashboard log panel)
 - Hallucination prevention via RAG grounding on all product claims
 - Lead quality tracked via `qualification_score` distribution
