@@ -6,7 +6,7 @@ All agents inherit from BaseAgent to get:
   - Retry logic with exponential backoff
   - LLM call wrapper with error handling
   - Redis caching for LLM responses
-  - Input/output validation hooks
+  - LangSmith tracing on every LLM call (automatic via ChatGroq)
 
 Architectural Decision:
   Without a base class, each agent reimplements retry logic, logging,
@@ -14,13 +14,26 @@ Architectural Decision:
   and maintenance burden. The base class enforces a contract:
   every agent handles failures the same way, logs the same fields,
   and benefits from caching automatically.
+
+LangSmith Tracing:
+  We use ChatGroq (langchain_groq) instead of the raw Groq SDK.
+  LangChain-wrapped LLM calls are automatically traced by LangSmith
+  when LANGCHAIN_TRACING_V2=true is set. This means every prompt,
+  response, token count, and latency appears in the LangSmith dashboard
+  per pipeline run, giving full visibility into what each agent actually
+  sent and received from the model.
+
+  The raw Groq SDK (groq.Groq) bypasses this tracing entirely since
+  LangSmith only intercepts calls made through LangChain Runnable objects.
 """
 import json
+import re
 import time
 import uuid
 from abc import ABC, abstractmethod
-from typing import Optional
-from groq import Groq, RateLimitError, APIError
+from langchain_groq import ChatGroq
+from langchain_core.messages import HumanMessage
+from groq import RateLimitError, APIError
 from core.config import get_settings
 from core.exceptions import LLMError, LLMRateLimitError, LLMResponseParseError
 from cache.redis_client import get_cached, set_cached, cache_key
@@ -39,7 +52,21 @@ class BaseAgent(ABC):
     def __init__(self, correlation_id: str = None):
         self.correlation_id = correlation_id or str(uuid.uuid4())[:8]
         self.log = logger.bind(agent=self.name, correlation_id=self.correlation_id)
-        self.client = Groq(api_key=settings.groq_api_key)
+
+    def _get_llm(self, temperature: float, max_tokens: int) -> ChatGroq:
+        """
+        Return a ChatGroq instance configured for this specific call.
+        Creating per-call is intentional: temperature and max_tokens differ
+        between extraction calls (low temp, shorter output) and creative
+        calls (higher temp, longer output). ChatGroq construction is cheap,
+        the cost is in the network call.
+        """
+        return ChatGroq(
+            api_key=settings.groq_api_key,
+            model=settings.groq_model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
 
     def call_llm(
         self,
@@ -50,15 +77,14 @@ class BaseAgent(ABC):
     ) -> str:
         """
         LLM call with:
-          - Redis caching (skip duplicate calls)
+          - Redis caching (skip duplicate calls for same company)
           - Retry with exponential backoff on rate limits
           - Structured error handling
+          - Automatic LangSmith tracing (via ChatGroq)
 
-        Architectural Decision:
-          Wrapping all LLM calls through this method means:
-          - Cache hit rate is measurable (log cache hits vs misses)
-          - Rate limit retries happen automatically
-          - Any future LLM provider swap only needs to change this method
+        Every call through this method appears in LangSmith as a traced
+        LLM run nested under the parent LangGraph pipeline run, showing
+        the full prompt, response, token usage, and latency.
         """
         temperature = temperature or settings.llm_temperature_extract
         max_tokens = max_tokens or settings.llm_max_tokens_extract
@@ -69,20 +95,17 @@ class BaseAgent(ABC):
         if use_cache:
             cached = get_cached(ck)
             if cached:
-                self.log.debug("LLM cache hit", extra={"cache_key": ck[:16]})
+                self.log.debug(f"LLM cache hit (key: {ck[:16]})")
                 return cached
+
+        llm = self._get_llm(temperature, max_tokens)
 
         # Retry loop with exponential backoff
         for attempt in range(self.max_retries):
             try:
                 self.log.debug(f"LLM call attempt {attempt + 1}/{self.max_retries}")
-                response = self.client.chat.completions.create(
-                    model=settings.groq_model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-                result = response.choices[0].message.content.strip()
+                response = llm.invoke([HumanMessage(content=prompt)])
+                result = response.content.strip()
 
                 # Cache successful response
                 if use_cache:
@@ -101,6 +124,20 @@ class BaseAgent(ABC):
                 self.log.error(f"Groq API error: {e}")
                 raise LLMError(f"LLM API error: {e}")
 
+            except Exception as e:
+                # Catch any LangChain-wrapped exceptions that don't surface as
+                # groq native types (e.g. connection errors, unexpected responses)
+                err_str = str(e).lower()
+                if "rate" in err_str and ("limit" in err_str or "429" in err_str):
+                    delay = self.base_delay * (2 ** attempt)
+                    self.log.warning(f"Rate limit (wrapped). Retrying in {delay}s...")
+                    time.sleep(delay)
+                    if attempt == self.max_retries - 1:
+                        raise LLMRateLimitError("Rate limit exceeded after retries")
+                else:
+                    self.log.error(f"Unexpected LLM error: {e}")
+                    raise LLMError(f"LLM error: {e}")
+
         raise LLMError("LLM call failed after all retries")
 
     def parse_json_response(self, raw: str) -> dict:
@@ -109,8 +146,6 @@ class BaseAgent(ABC):
         LLMs often wrap JSON in markdown code blocks or add commentary.
         Handles: code fences, preamble/postamble text, raw newlines in strings.
         """
-        import re
-
         # Strip markdown code fences if present
         raw = raw.strip()
         if "```json" in raw:
@@ -136,11 +171,9 @@ class BaseAgent(ABC):
         except json.JSONDecodeError:
             pass
 
-        # Attempt 2: escape unescaped control characters inside string values
-        # LLMs sometimes emit literal newlines/tabs inside JSON strings
+        # Attempt 2: escape unescaped control characters inside string values.
+        # LLMs sometimes emit literal newlines/tabs inside JSON strings.
         def fix_control_chars(s: str) -> str:
-            # Replace raw newlines/tabs/carriage returns that appear inside
-            # JSON string values (between quotes) with their escaped equivalents
             result = []
             in_string = False
             escape_next = False
