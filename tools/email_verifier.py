@@ -41,7 +41,7 @@ def _check_mx(domain: str) -> bool:
     """Return True if the domain has at least one MX record."""
     try:
         import dns.resolver
-        answers = dns.resolver.resolve(domain, "MX", lifetime=5)
+        answers = dns.resolver.resolve(domain, "MX", lifetime=2)
         return len(answers) > 0
     except Exception:
         # If dns library missing or lookup fails, assume valid (don't block)

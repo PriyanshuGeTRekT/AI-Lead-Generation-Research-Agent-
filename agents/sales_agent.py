@@ -221,9 +221,30 @@ class SalesAgent(BaseAgent):
         qualified = [l for l in leads if l.get("status") == "qualified"]
         correlation_id = state.get("correlation_id", self.correlation_id)
 
-        self.log.info(f"Generating outreach sequences for {len(qualified)} qualified leads")
+        # Cap email-sequence generation to the top 5 leads by score to stay
+        # within Groq free-tier rate limits (30 req/min). All leads are still
+        # returned as qualified — only the top 5 get email sequences drafted.
+        MAX_SEQUENCES = 5
+        qualified_for_sequences = sorted(
+            qualified,
+            key=lambda l: l.get("qualification_score") or 0,
+            reverse=True,
+        )[:MAX_SEQUENCES]
+        qualified_rest = [l for l in qualified if l not in qualified_for_sequences]
 
-        for lead in qualified:
+        # Leads that won't get sequences still become outreach_ready / pending_review
+        for lead in qualified_rest:
+            if settings.slack_webhook_url:
+                lead["status"] = "pending_review"
+            else:
+                lead["status"] = "outreach_ready"
+
+        self.log.info(
+            f"Generating outreach sequences for top {len(qualified_for_sequences)} "
+            f"of {len(qualified)} qualified leads (rate-limit cap)"
+        )
+
+        for lead in qualified_for_sequences:
             company_name = lead.get("company_name", "Unknown")
             self.log.info(f"Drafting 4-email sequence for: {company_name}")
 
