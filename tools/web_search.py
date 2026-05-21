@@ -3,8 +3,11 @@ import time
 import json
 import requests
 from typing import List, Dict
+from urllib.parse import urlparse
 from duckduckgo_search import DDGS
 from loguru import logger
+from tools.naukri_scraper import search_naukri_companies
+from tools.indeed_scraper import search_indeed_companies
 
 
 def search_companies(keyword: str, max_results: int = 10) -> List[Dict]:
@@ -163,6 +166,58 @@ def _get_fallback_companies(keyword: str) -> List[Dict]:
     ] or all_companies
 
     return relevant[:8]
+
+
+def search_companies_multi_source(keyword: str) -> List[Dict]:
+    """
+    Fan-out search across DuckDuckGo, Naukri.com, and Indeed India.
+    Merges results and deduplicates by root domain.
+    Returns a unified list of company lead dicts.
+    """
+    # --- DuckDuckGo ---
+    ddg_raw = search_companies(keyword)
+    duckduckgo_results = []
+    for r in ddg_raw:
+        if "source" not in r:
+            r["source"] = "duckduckgo"
+        duckduckgo_results.append(r)
+
+    # --- Naukri ---
+    naukri_results = search_naukri_companies()
+
+    # --- Indeed ---
+    indeed_results = search_indeed_companies()
+
+    duckduckgo_count = len(duckduckgo_results)
+    naukri_count = len(naukri_results)
+    indeed_count = len(indeed_results)
+
+    all_results = duckduckgo_results + naukri_results + indeed_results
+
+    # Deduplicate by root domain (strip www.)
+    seen_domains: set = set()
+    deduped: List[Dict] = []
+    for item in all_results:
+        url = item.get("url", "")
+        if not url:
+            deduped.append(item)
+            continue
+        try:
+            domain = urlparse(url).netloc.replace("www.", "").lower()
+        except Exception:
+            domain = url.lower()
+
+        if domain and domain not in seen_domains:
+            seen_domains.add(domain)
+            deduped.append(item)
+
+    deduped_count = len(deduped)
+    logger.info(
+        f"Multi-source search: {duckduckgo_count} duckduckgo, "
+        f"{naukri_count} naukri, {indeed_count} indeed, "
+        f"{deduped_count} after dedup"
+    )
+    return deduped
 
 
 def scrape_company_info(url: str) -> str:

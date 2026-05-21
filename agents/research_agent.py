@@ -13,7 +13,7 @@ Extends BaseAgent for:
 import json
 from graph.state import LeadState
 from agents.base import BaseAgent
-from tools.web_search import search_companies, scrape_company_info
+from tools.web_search import search_companies_multi_source, scrape_company_info
 from cache.redis_client import is_duplicate_lead, mark_lead_seen
 from rag.hallucination_guard import guard_llm_response
 from observability.langsmith_tracer import stage_timer, log_hallucination_event
@@ -60,7 +60,7 @@ class ResearchAgent(BaseAgent):
         correlation_id = state.get("correlation_id", self.correlation_id)
         self.log.info(f"Starting search for keyword: '{keyword}'")
 
-        search_results = search_companies(keyword, max_results=settings.web_search_results)
+        search_results = search_companies_multi_source(keyword)
 
         if not search_results:
             self.log.warning("Web search returned no results")
