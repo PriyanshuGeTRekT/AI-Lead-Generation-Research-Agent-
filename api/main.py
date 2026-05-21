@@ -103,10 +103,14 @@ async def validation_handler(request: Request, exc: InputValidationError):
 
 class LeadRequest(BaseModel):
     keyword: str = "manufacturing company India 200 employees"
+    max_leads: Optional[int] = None   # override MAX_LEADS_PER_RUN for this run (max 100)
 
     class Config:
         json_schema_extra = {
-            "example": {"keyword": "logistics company India 500 employees"}
+            "example": {
+                "keyword": "logistics company India 500 employees",
+                "max_leads": 25,
+            }
         }
 
 
@@ -173,16 +177,15 @@ def ingest_knowledge():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def _try_celery_async(keyword: str, run_id: str) -> bool:
+def _try_celery_async(keyword: str, run_id: str, max_leads: int) -> bool:
     """
     Attempt to dispatch the pipeline to a Celery worker.
     Returns True if the task was queued successfully, False if no worker is reachable.
-    This allows the endpoint to fall back to synchronous execution gracefully.
     """
     try:
         from worker import run_pipeline_task
         run_pipeline_task.apply_async(
-            kwargs={"keyword": keyword, "run_id": run_id},
+            kwargs={"keyword": keyword, "run_id": run_id, "max_leads": max_leads},
             task_id=run_id,
         )
         return True
@@ -200,8 +203,9 @@ def generate_leads(request: LeadRequest, req: Request):
       Returns immediately with a run_id. Poll /pipeline-status/{run_id} for results.
 
     Sync mode (no worker, default):
-      Runs inline, returns results directly. Behavior identical to previous versions.
+      Runs inline, returns results directly.
 
+    max_leads: override the default 50-lead cap (max 100). Larger values take longer.
     Rate limited: 10 requests/minute per IP.
     Input sanitized against prompt injection.
     """
@@ -214,12 +218,16 @@ def generate_leads(request: LeadRequest, req: Request):
     keyword = validate_keyword(request.keyword)
     run_id = str(uuid.uuid4())[:8]
 
+    # Resolve max_leads: request override → config default (capped at 100)
+    max_leads = min(request.max_leads or settings.max_leads_per_run, 100)
+
     # Try async dispatch first; fall back to sync if no worker is available
-    if _try_celery_async(keyword, run_id):
+    if _try_celery_async(keyword, run_id, max_leads):
         return {
             "status": "queued",
             "run_id": run_id,
-            "message": f"Pipeline queued. Poll /pipeline-status/{run_id} for results.",
+            "max_leads": max_leads,
+            "message": f"Pipeline queued (up to {max_leads} leads). Poll /pipeline-status/{run_id} for results.",
         }
 
     # Synchronous fallback (default when no Celery worker is running)
@@ -227,7 +235,7 @@ def generate_leads(request: LeadRequest, req: Request):
         from graph.supervisor import run_pipeline
         from observability.langsmith_tracer import log_lead_quality
 
-        state = run_pipeline(keyword)
+        state = run_pipeline(keyword, max_leads=max_leads)
         leads = state.get("leads", [])
 
         log_lead_quality(leads)

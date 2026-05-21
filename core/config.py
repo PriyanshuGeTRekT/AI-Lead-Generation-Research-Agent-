@@ -45,9 +45,9 @@ class Settings(BaseSettings):
     redis_pipeline_ttl: int = 86400      # 24 hour TTL for pipeline state
 
     # ── Pipeline ──────────────────────────────────────────────────────────────
-    max_leads_per_run: int = 10
+    max_leads_per_run: int = 50         # increase via MAX_LEADS_PER_RUN env var
     max_iterations: int = 10
-    web_search_results: int = 10
+    web_search_results: int = 100
     request_timeout: int = 10            # seconds for web scraping
 
     # ── Observability ─────────────────────────────────────────────────────────

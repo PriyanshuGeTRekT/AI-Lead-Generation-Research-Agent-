@@ -76,11 +76,12 @@ def build_graph() -> StateGraph:
     return graph.compile()
 
 
-def run_pipeline(keyword: str) -> LeadState:
+def run_pipeline(keyword: str, max_leads: int = None) -> LeadState:
     """
     Entry point: run the full lead generation pipeline.
-    Generates a correlation_id that flows through all agent logs
-    so the entire run is traceable end-to-end.
+    Generates a correlation_id that flows through all agent logs.
+
+    max_leads: cap on how many leads to process (overrides config default).
     """
     correlation_id = str(uuid.uuid4())[:8]
     log = logger.bind(agent="supervisor", correlation_id=correlation_id)
@@ -91,13 +92,14 @@ def run_pipeline(keyword: str) -> LeadState:
         "keyword": keyword,
         "leads": [],
         "messages": [],
-        "next": "research",   # intent marker only — LangGraph routes to set_entry_point first
+        "next": "research",
         "iteration": 0,
         "errors": [],
         "correlation_id": correlation_id,
+        "max_leads": max_leads or settings.max_leads_per_run,
     }
 
-    log.info(f"Pipeline START | keyword='{keyword}'")
+    log.info(f"Pipeline START | keyword='{keyword}' max_leads={initial_state['max_leads']}")
 
     final_state = graph.invoke(initial_state)
 

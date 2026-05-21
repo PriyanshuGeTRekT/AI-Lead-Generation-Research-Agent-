@@ -69,7 +69,7 @@ class ResearchAgent(BaseAgent):
         correlation_id = state.get("correlation_id", self.correlation_id)
         self.log.info(f"Starting search for keyword: '{keyword}'")
 
-        search_results = search_companies_multi_source(keyword)
+        search_results = search_companies_multi_source(keyword, max_results=settings.max_leads_per_run * 2)
 
         if not search_results:
             self.log.warning("Web search returned no results")
@@ -83,13 +83,10 @@ class ResearchAgent(BaseAgent):
         self.log.info(f"Found {len(search_results)} search results")
         new_leads = []
 
-        # Cap results at max_leads_per_run. Domain filtering already handled upstream
-        # by _BLOCKED_DOMAINS in tools/web_search.py (Serper path) and the
-        # search_companies_multi_source dedup step. A redundant SKIP_DOMAINS list
-        # here was removed to avoid maintaining two copies of the same allowlist.
-        valid_results = [
-            r for r in search_results if r.get("url")
-        ][:settings.max_leads_per_run]
+        # Use per-run max_leads if provided in state, else fall back to config.
+        run_cap = state.get("max_leads") or settings.max_leads_per_run
+        valid_results = [r for r in search_results if r.get("url")][:run_cap]
+        self.log.info(f"Processing {len(valid_results)} candidates (cap={run_cap})")
 
         for result in valid_results:
             url = result.get("url", "")

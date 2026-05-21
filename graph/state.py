@@ -49,3 +49,4 @@ class LeadState(TypedDict):
     iteration: int                            # Loop counter (prevent infinite loops)
     errors: Annotated[List[str], operator.add]
     correlation_id: Optional[str]             # Trace ID linking all agent logs for one run
+    max_leads: Optional[int]                  # Per-run cap; overrides config default
