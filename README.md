@@ -4,7 +4,7 @@ An AI-powered lead generation system for HRMS software sales, built with a **Sup
 
 **Live dashboard** at `http://localhost:8000` (no curl required).
 
-![Dashboard showing 5 lead cards with score badges, pain points, and outreach emails](https://img.shields.io/badge/UI-Dashboard-teal) ![API](https://img.shields.io/badge/API-FastAPI-green) ![LLM](https://img.shields.io/badge/LLM-Llama%203.1-blue) ![Redis](https://img.shields.io/badge/Cache-Redis-red)
+![Dashboard](https://img.shields.io/badge/UI-Dashboard-teal) ![API](https://img.shields.io/badge/API-FastAPI-green) ![LLM](https://img.shields.io/badge/LLM-Llama%203.1-blue) ![Redis](https://img.shields.io/badge/Cache-Redis-red) ![Celery](https://img.shields.io/badge/Queue-Celery-brightgreen)
 
 ## Architecture
 
@@ -24,18 +24,22 @@ An AI-powered lead generation system for HRMS software sales, built with a **Sup
             │                │                   │
             ▼                ▼                   ▼
    ┌─────────────────┐  Score 0-10       ┌──────────────────┐
-   │ DuckDuckGo      │  ≥5 → Sales       │  Human Review    │
-   │ Naukri.com      │  <5 → Discard     │  (Slack, opt-in) │
-   │ Indeed.in       │                   └────────┬─────────┘
-   └─────────────────┘                            │
-   dedup by domain                    approve → outreach_ready
-                                      reject  → disqualified
+   │ Serper.dev      │  ≥5 → Sales       │  Human Review    │
+   │ (Google Search) │  <5 → Discard     │  (Slack, opt-in) │
+   │ Naukri.com      │                   └────────┬─────────┘
+   │ Indeed.in       │                            │
+   └─────────────────┘               approve → outreach_ready
+   dedup by domain                   reject  → disqualified
 
-   Optional async path:
-   ┌──────┐   Celery task    ┌────────────────┐
-   │ API  │ ─────────────── ▶│  Celery Worker │
-   └──────┘  (sync fallback  └────────────────┘
-              if no worker)
+   Async path (Celery worker):
+   ┌──────┐  POST /generate-leads   ┌────────────────┐
+   │ API  │ ──── run_id returned ──▶│ Celery Worker  │
+   │      │◀─ poll /pipeline-status─│ (background)   │
+   └──────┘                         └────────────────┘
+   Dashboard polls every 3s, shows live stage progress
+
+   Sync fallback (no Celery worker):
+   /generate-leads blocks and returns leads directly
 
    Vector stores:
    ChromaDB (default)  or  pgvector on PostgreSQL (USE_PGVECTOR=true)
@@ -45,67 +49,90 @@ An AI-powered lead generation system for HRMS software sales, built with a **Sup
 
 | Component | Technology | Why |
 |-----------|-----------|-----|
-| Agent Orchestration | LangGraph | Conditional routing, shared state |
-| LLM | Llama 3.1 8B via Groq | Open-source model, fast LPU inference |
+| Agent Orchestration | LangGraph | Conditional routing, shared state, early exit |
+| LLM | Llama 3.1 8B via Groq | Open-source model, sub-second LPU inference |
 | LLM Client | langchain-groq (ChatGroq) | LangChain wrapper enables full LangSmith tracing |
 | Vector Store | ChromaDB | Persistent, local, no infra needed |
 | Embeddings | sentence-transformers (all-MiniLM-L6-v2) | Open-source, HuggingFace |
-| Web Search | DuckDuckGo Search | Free, no API key |
-| Multi-source Search | DuckDuckGo + Naukri.com + Indeed.in | Buying-signal lead discovery |
+| Web Search | Serper.dev (Google Search API) | Real Google results, 2,500 free queries, India-targeted |
+| Multi-source Search | Serper.dev + Naukri.com + Indeed.in | Buying-signal lead discovery |
 | Structured Output | LangChain `.with_structured_output()` + Pydantic | Schema-enforced LLM responses |
-| Human Review | Slack Incoming Webhooks | Approve/reject leads before outreach |
-| Async Queue | Celery + Redis (DB 1) | Non-blocking pipeline execution |
+| Human Review | Slack Incoming Webhooks + Block Kit | Approve/reject leads before outreach |
+| Async Queue | Celery + Redis (DB 1) | Non-blocking pipeline, retries, job status |
+| Caching & Dedup | Redis (DB 0) | LLM response cache, rate limiting, lead dedup |
 | Vector Store (scale) | pgvector on PostgreSQL | Production-grade at high lead volume |
-| API | FastAPI | Async, auto-docs |
+| API | FastAPI | Async, auto-docs at /docs |
 | Observability | LangSmith + custom JSONL metrics | LLM-level + business-level tracing |
-| Containerization | Docker | Portable deployment |
+| Containerization | Docker Compose | 4 containers: api, redis, celery_worker, postgres |
 
 ## Quick Start
 
 ### 1. Prerequisites
 - Docker & Docker Compose installed
 - Free Groq API key from [console.groq.com](https://console.groq.com)
+- (Optional) Serper.dev API key from [serper.dev](https://serper.dev) — 2,500 free queries
+- (Optional) LangSmith API key from [smith.langchain.com](https://smith.langchain.com)
+- (Optional) Slack Incoming Webhook URL for human-in-the-loop review
 
 ### 2. Setup
 ```bash
 git clone <repo>
 cd ai-lead-gen
 cp .env.example .env
-# Edit .env and add your GROQ_API_KEY
+# Edit .env and add your GROQ_API_KEY (required) and any optional keys
+```
+
+Key `.env` variables:
+```
+GROQ_API_KEY=your_key_here
+GROQ_MODEL=llama-3.1-8b-instant
+SERPER_API_KEY=your_serper_key     # optional, falls back to curated dataset
+LANGCHAIN_API_KEY=your_ls_key      # optional, enables LangSmith tracing
+SLACK_WEBHOOK_URL=https://hooks... # optional, enables human review flow
+BASE_URL=http://localhost:8000     # used in Slack approve/reject links
 ```
 
 ### 3. Run
 
-Two startup modes depending on which features you need:
-
-**Minimal (default): API + Redis + ChromaDB**
+**Minimal (default): API + Redis only**
 ```bash
 docker compose up --build
 ```
 
-**Full stack: adds Celery worker + PostgreSQL/pgvector**
+**Full stack: adds Celery async worker + PostgreSQL/pgvector**
 ```bash
 docker compose --profile full up --build
 ```
 
-The default mode works exactly as before. The full stack enables async pipeline execution and pgvector as the vector store (set `USE_PGVECTOR=true` in `.env` when using the full profile).
+The default mode works perfectly for demos. The full stack enables async pipeline execution (non-blocking API) and pgvector as the vector store (`USE_PGVECTOR=true`).
 
 ### 4. Build Knowledge Base (Run Once)
+
+From the dashboard at `http://localhost:8000`, click **"Re-ingest RAG Knowledge"**, or via API:
 ```bash
 curl -X POST http://localhost:8000/ingest-knowledge
 ```
-This scrapes humanmaximizer.com and builds the RAG vector store.
+This scrapes humanmaximizer.com, chunks the content, embeds it with `all-MiniLM-L6-v2`, and stores it in ChromaDB. Safe to call multiple times — skips if already built.
 
 ### 5. Generate Leads
+
+**Via Dashboard** (recommended):
+Open `http://localhost:8000`, enter a keyword, and click **"Generate Leads"**.
+
+If the Celery worker is running (full stack), the dashboard shows a live progress panel with three stages (Research → Qualify → Sales), an elapsed timer, and estimated completion time. It polls the `/pipeline-status/{run_id}` endpoint every 3 seconds automatically.
+
+**Via API:**
 ```bash
 curl -X POST http://localhost:8000/generate-leads \
   -H "Content-Type: application/json" \
   -d '{"keyword": "manufacturing company India 200 employees"}'
 ```
 
-If a Celery worker is running, this returns immediately with a `run_id`. Otherwise it executes synchronously and returns leads directly, with no configuration change needed.
+If a Celery worker is running, returns immediately with `{"status": "queued", "run_id": "abc123"}`.
+If no worker, runs synchronously and returns leads directly.
 
 ### 6. View Results
+
 ```bash
 # All leads
 curl http://localhost:8000/leads
@@ -113,121 +140,141 @@ curl http://localhost:8000/leads
 # Only outreach-ready leads
 curl http://localhost:8000/leads?status=outreach_ready
 
-# Leads waiting for human review (if SLACK_WEBHOOK_URL is set)
+# Leads waiting for human review
 curl http://localhost:8000/leads/pending-review
 ```
 
+### 7. Flush Cache (for a fresh run)
+
+```bash
+curl -X POST http://localhost:8000/flush-cache
+```
+
+Clears the Redis deduplication cache and Celery result backend so the next run processes companies fresh. Useful between demo runs.
+
 ### Dashboard UI
-Open **http://localhost:8000** in your browser for a full lead generation dashboard with:
-- Live pipeline execution with animated step indicators (Research -> Qualify -> Sales)
-- Lead cards with score badges, pain point tags, and qualification reasoning
-- Expandable outreach emails with one-click copy
-- Filter by status: Outreach Ready / Qualified / Disqualified / Researched
-- Real-time metrics: latency, lead counts, avg score
-- Sidebar pipeline log showing agent decisions as they happen
+
+Open **http://localhost:8000** in your browser:
+
+- **Keyword input** with "Generate Leads" button
+- **Live progress panel** (async mode): animated Research → Qualify → Sales stage tracker with elapsed timer and lead count live-updating
+- **Lead cards** with score badges, pain point tags, qualification reasoning, and generated outreach emails
+- **Approve/Reject buttons** directly on each lead card (when status is `pending_review`)
+- **Expandable outreach emails** with one-click copy
+- **Filter by status**: Outreach Ready / Pending Review / Disqualified / Researched
+- **Metrics panel**: pipeline latency, lead counts, average score
+- **Pipeline log sidebar**: agent decisions as they happen
 
 ### API Docs
-Visit: http://localhost:8000/docs (Swagger UI auto-generated)
+Visit `http://localhost:8000/docs` for Swagger UI (auto-generated from FastAPI).
+
+---
 
 ## Agent Flow
 
-1. **Research Agent**: takes a keyword, fans out to DuckDuckGo, Naukri.com, and Indeed.in, scrapes company websites, and uses Llama 3 to extract structured lead info (company, size, decision makers, pain points). Results are deduplicated by domain before passing downstream.
+### 1. Research Agent
+Takes a keyword, fans out to Serper.dev (Google Search API with India geo-targeting), Naukri.com, and Indeed.in. Serper results are filtered through a domain blocklist that removes aggregators (Wikipedia, LinkedIn, IndiaMART, Crunchbase, etc.) so only actual company websites reach the pipeline. Scrapes company homepages to get raw text. Uses Llama 3.1 to extract structured lead info (`LeadExtraction` Pydantic schema): company name, size, industry, location, decision makers, pain points. Results are deduplicated by root domain before passing downstream.
 
-2. **Qualification Agent**: scores each lead 0 to 10 using RAG-grounded LLM reasoning with structured Pydantic output. It retrieves relevant HRMS product context from ChromaDB (or pgvector) to match prospect needs against product capabilities. Leads scoring 5 or above move forward, the rest get discarded.
+### 2. Qualification Agent
+Scores each lead 0–10 using RAG-grounded LLM reasoning with `QualificationResult` Pydantic schema via `.with_structured_output()`. Retrieves top-4 product context chunks from ChromaDB to match prospect needs against HumanMaximizer capabilities. Leads scoring ≥5.0 move forward; below threshold gets `status: disqualified`. Also generates a lead summary with a visual score bar (█░░░) and key signals for the dashboard.
 
-3. **Sales Agent**: generates personalized outreach emails for qualified leads. Uses RAG to make sure product claims are grounded in actual HumanMaximizer features, not made up. If `SLACK_WEBHOOK_URL` is set, the lead goes to `pending_review` and a Slack message is sent for human approval before outreach.
+### 3. Sales Agent
+Generates personalized outreach emails for qualified leads. Uses RAG to ground product claims in actual HumanMaximizer features. Runs a hallucination guard that checks fabricated revenue figures, year ranges, and product claims not present in retrieved chunks. If `SLACK_WEBHOOK_URL` is set, the lead goes to `pending_review` and a Block Kit Slack message is sent with Approve/Reject links. Without Slack, leads go directly to `outreach_ready`.
+
+---
 
 ## Multi-Source Lead Discovery
 
-The Research Agent searches three sources in parallel and deduplicates by domain using `urllib.parse`:
+The Research Agent searches three sources and deduplicates by domain:
 
-- **DuckDuckGo**: broad web coverage, general company discovery
-- **Naukri.com** (`tools/naukri_scraper.py`): scrapes companies posting HR Manager, HRIS, or Payroll job listings on naukri.com/hr-jobs-in-india
-- **Indeed.in** (`tools/indeed_scraper.py`): scrapes the same signal from in.indeed.com
+- **Serper.dev** (`tools/web_search.py`): Real Google Search results via API (`gl=in` India geo-targeting). A domain blocklist filters out aggregators, job boards, and list pages so only actual company websites pass through. Falls back to a curated 15-company Indian dataset if no API key is set.
+- **Naukri.com** (`tools/naukri_scraper.py`): Scrapes companies posting HR Manager, HRIS, or Payroll job listings — a strong buying signal.
+- **Indeed.in** (`tools/indeed_scraper.py`): Same buying-signal logic from India's Indeed.
 
-The buying signal logic: a company actively hiring HR staff is in an active HR spending cycle. They have headcount for HR, which means they have a payroll and compliance problem to solve, which makes them a direct prospect for HRMS software. This is a stronger signal than generic industry or company size.
+The buying signal logic: a company actively hiring HR staff is in an active HR spending cycle. They have headcount for HR, which means they have a payroll and compliance problem to solve, making them a direct prospect for HRMS software.
 
-Deduplication works at the domain level. If DuckDuckGo finds `acmecorp.com` and Naukri also returns `acmecorp.com`, only one lead is passed to the qualification pipeline. The scrapers are fail-safe: any network error or parsing failure returns an empty list so the pipeline keeps running on whatever results the other sources returned.
+`tools/web_search.py` exposes `search_companies_multi_source(keyword)` which fans out to all three sources. The scrapers are fail-safe — any network error returns an empty list so the pipeline keeps running on whatever the other sources returned.
 
-`tools/web_search.py` exposes `search_companies_multi_source(keyword)` which fans out to all three sources. `agents/research_agent.py` calls this instead of the original `search_companies()`.
+---
 
 ## Structured LLM Output
 
-The qualification agent previously called `call_llm()` and then parsed the JSON string from the response manually, which failed whenever the model returned prose instead of JSON.
+The qualification agent uses LangChain's `.with_structured_output()` bound to a Pydantic schema. Groq's Llama 3.1 implements this via tool calling, so the response is always schema-valid before it reaches application code.
 
-The new approach uses LangChain's `.with_structured_output()` bound to a Pydantic schema. Groq's Llama 3.1 implements this via tool calling internally, so the response is always schema-valid before it reaches application code.
-
-Two new Pydantic models in `models/schemas.py`:
+Two Pydantic models in `models/schemas.py`:
 - `LeadExtraction`: company info fields (name, size, industry, location, decision makers, pain points)
 - `QualificationResult`: `score` (float 0-10), `reasoning` (str), `key_signals` (list), `recommended_action` (str)
 
-`agents/base.py` adds `call_llm_structured(prompt, schema)` which calls `.with_structured_output(schema)`. `agents/qualification_agent.py` calls this method instead of `call_llm() + parse_json_response()`.
+`agents/base.py` adds `call_llm_structured(prompt, schema)`. Fallback: if `.with_structured_output()` raises, falls back to raw `call_llm()` + JSON parsing + `schema(**parsed)`. The pipeline never hard-fails on structured output issues.
 
-Fallback path: if `.with_structured_output()` raises (model or provider does not support it), the method falls back to raw `call_llm()` + JSON parsing + `schema(**parsed)`. The pipeline never hard-fails on structured output issues.
+---
 
 ## Human-in-the-Loop Review
 
-When `SLACK_WEBHOOK_URL` is set in `.env`, leads do not go directly to `outreach_ready` after email generation. Instead:
+When `SLACK_WEBHOOK_URL` is set in `.env`:
 
 1. Sales Agent sets status to `pending_review`
-2. `notifications/slack.py` sends a Slack Block Kit message with 5 blocks: a header, lead details (score, industry, location), pain points, an email preview (first 250 characters), and Approve/Reject buttons
-3. Approve button links to `{BASE_URL}/leads/{id}/approve`, Reject links to `{BASE_URL}/leads/{id}/reject`
-4. A human clicks Approve or Reject in Slack, which hits the API endpoint
-5. Approved leads move to `outreach_ready`, rejected leads move to `disqualified`
+2. `notifications/slack.py` sends a Slack Block Kit message: header, lead details (score, industry, location), pain points, email preview (first 250 chars), and Approve/Reject buttons
+3. Approve button links to `{BASE_URL}/leads/{id}/approve` (GET + POST both supported for Slack compatibility)
+4. Human clicks → API endpoint → status changes
+5. Approved → `outreach_ready`, rejected → `disqualified`
 
-Without `SLACK_WEBHOOK_URL` set, the Sales Agent sets status directly to `outreach_ready` and no Slack call is made. Behavior is identical to v1.
+Without `SLACK_WEBHOOK_URL`, the Sales Agent sets status directly to `outreach_ready`.
+
+**Approve/Reject directly from the dashboard**: Lead cards with `pending_review` status show inline Approve and Reject buttons — no Slack required for approval via the UI.
 
 **Setup:**
 1. Create a Slack app at api.slack.com/apps
 2. Enable Incoming Webhooks for your workspace
 3. Copy the webhook URL to `.env` as `SLACK_WEBHOOK_URL`
+4. Set `BASE_URL=http://your-server:8000` so the approve/reject links in Slack point to your server
 
-**New API endpoints:**
-- `GET /leads/pending-review`: list all leads awaiting human approval
-- `POST /leads/{id}/approve`: set lead status to `outreach_ready`
-- `POST /leads/{id}/reject`: set lead status to `disqualified`
+---
 
 ## Async Pipeline (Celery)
 
-Without Celery, `/generate-leads` blocks for 20-30 seconds while the pipeline runs. That is fine for demos and single-user setups, but breaks under concurrent load.
+Without Celery, `/generate-leads` blocks for 2–3 minutes while the pipeline runs. With a Celery worker running, the API dispatches the pipeline as a background task and returns `{"status": "queued", "run_id": "..."}` instantly.
 
-With a Celery worker running, the API dispatches the pipeline as a background task and returns `{"status": "queued", "run_id": "..."}` instantly. The caller polls `GET /pipeline-status/{run_id}` for state (PENDING, STARTED, SUCCESS, FAILURE) and the result when done.
+**How the dashboard handles this:**
+1. Clicks "Generate Leads" → POST `/generate-leads` → gets `run_id` back immediately
+2. Shows a progress panel with 3 stages: Research (0–45s), Qualify (45–130s), Sales (130s+)
+3. Polls `GET /pipeline-status/{run_id}` every 3 seconds
+4. When status becomes `SUCCESS`, lead cards appear automatically
 
-The fallback is automatic: if the worker is not reachable (import error or connection refused), `/generate-leads` silently runs synchronously and returns leads directly. No config change, no error.
+**The fallback is automatic**: if no Celery worker is reachable, `/generate-leads` runs synchronously and returns leads directly. The dashboard detects this (`status: success` on the first response) and skips polling entirely. No config change needed.
 
-`worker.py` at the project root defines the Celery app. It uses Redis DB 1 as both broker and result backend, keeping it separate from the LLM cache on Redis DB 0.
+`worker.py` defines the Celery app. Redis DB 1 is used as both broker and result backend, separate from LLM cache on DB 0.
 
-**Start the worker:**
+**Start the worker (without Docker):**
 ```bash
 celery -A worker worker --loglevel=info --concurrency=2
 ```
 
-Or use the full Docker Compose profile which starts it automatically:
+**Via Docker (full stack):**
 ```bash
 docker compose --profile full up --build
 ```
 
-**Poll status:**
+**Poll status manually:**
 ```bash
 curl http://localhost:8000/pipeline-status/{run_id}
+# Returns: {"run_id": "...", "status": "PENDING|STARTED|SUCCESS|FAILURE"}
 ```
+
+---
 
 ## Scaling: pgvector
 
-ChromaDB works well for a single instance with a few thousand documents. When you have multiple concurrent users or your lead data already lives in PostgreSQL, pgvector is the better choice.
+ChromaDB works well for a single instance. For production, pgvector gives ACID transactions, SQL tooling, and the same cosine similarity search ChromaDB provides.
 
-pgvector gives you: ACID transactions, SQL tooling (joins, filtering, backups), fewer infrastructure services to operate, and the same cosine similarity search ChromaDB provides.
-
-**How to activate:**
+**Activate:**
 ```
 USE_PGVECTOR=true   # in .env
 ```
 
-`rag/pgvector_store.py` defines `PgVectorStore`. It connects via psycopg2, auto-creates a `lead_embeddings` table with a `vector(384)` column and an HNSW index (`vector_cosine_ops`). It uses the same `all-MiniLM-L6-v2` embeddings as ChromaDB, so switching is one flag with no embedding changes.
+`rag/pgvector_store.py` connects via psycopg2, auto-creates a `lead_embeddings` table with a `vector(384)` column and an HNSW index (`vector_cosine_ops`). Same `all-MiniLM-L6-v2` embeddings as ChromaDB — switching is one flag with no code changes.
 
-The full Docker Compose profile starts a `pgvector/pgvector:pg16` container with a named volume for persistence and a health check. ChromaDB remains the default when `USE_PGVECTOR` is not set.
-
-**Migration path:** export ChromaDB documents, import into pgvector via `PgVectorStore.add_documents()`. The interface is identical so no agent code changes.
+---
 
 ## RAG Pipeline
 
@@ -241,113 +288,87 @@ humanmaximizer.com → Scrape → Chunk (500 tokens, 50 overlap)
                     Semantic retrieval at qualification & outreach
 ```
 
-## Fine-Tuning Roadmap
-
-Few-shot prompting with RAG handles qualification well enough for v1. Fine-tuning becomes valuable once you have enough human-labeled examples to train on.
-
-The Slack approval workflow is the data collection mechanism. Every time a human clicks Approve or Reject on a lead, that decision is a labeled training example: the lead info is the prompt, and the human decision plus the LLM's score and reasoning is the completion.
-
-When to fine-tune: after 200+ human-approved and rejected leads accumulate from the Slack review flow.
-
-- Dataset format: `{"prompt": "<lead_info>", "completion": "<score + reasoning>"}` sourced from human-approved leads
-- Method: QLoRA on Llama 3 8B using Unsloth (4-bit quantization, approximately 10GB VRAM)
-- Benefit: qualification scores grounded in your specific customer profile, not general LLM reasoning about what makes a good HRMS prospect
-
-## Model Selection
-
-Using **Llama 3 8B** (open-source, Meta) via **Groq** for inference:
-- Open-source model (satisfies the requirement fully)
-- Groq is just the inference engine (LPU hardware), not the model provider
-- 8192 context window (enough for lead + RAG context)
-- Fast inference via Groq's LPU (under 1s response)
-- Free tier: 14,400 requests/day
-- Upgrade path: `llama3-70b-8192` for higher quality, `mixtral-8x7b-32768` for longer context
-
-### Why Llama 3 over other open-source models?
-
-| Model | RAM | JSON | Reasoning | Verdict |
-|-------|-----|------|-----------|---------|
-| **Llama 3 8B** ✅ | ~6GB | ✅ Very good | ✅ Best in class | **Our choice** |
-| Mistral 7B | ~5GB | ✅ Excellent | ⚠️ Good | Best if RAM < 8GB |
-| Phi-3 Mini 3.8B | ~3GB | ⚠️ Struggles | ❌ Weak | Too small for pipeline |
-| Mixtral 8x7B | ~26GB | ✅ Best | ✅ Best | Needs GPU workstation |
-| Gemma 2 9B | ~7GB | ⚠️ OK | ⚠️ Good | Weaker JSON reliability |
-
-Llama 3 8B hits the right balance of **JSON extraction** (Research Agent), **multi-criteria reasoning** (Qualification Agent), and **creative writing** (Sales Agent).
-
-### Running Locally with Ollama (Groq swap-out)
-
-To run fully offline without Groq, swap to Ollama in 3 steps:
-
-**Step 1: Install Ollama & pull the model**
-```bash
-# Install: https://ollama.com
-ollama pull llama3       # ~4.7GB (same model, local inference)
-# or for RAM-constrained machines:
-ollama pull mistral      # ~4.1GB
-```
-
-**Step 2: Swap the LLM client in `agents/base.py`**
-```python
-# Before (ChatGroq via Groq API):
-from langchain_groq import ChatGroq
-llm = ChatGroq(api_key=settings.groq_api_key, model=settings.groq_model, ...)
-
-# After (ChatOllama via local Ollama):
-from langchain_ollama import ChatOllama
-llm = ChatOllama(model="llama3", temperature=temperature)
-```
-Everything else (retry logic, caching, LangSmith tracing) stays the same since
-both are LangChain Runnables.
-
-**Step 3: Update .env**
-```bash
-GROQ_MODEL=llama3   # used as a label only; ChatOllama ignores GROQ_API_KEY
-```
-
-Minimum hardware for local run:
-- **8GB RAM**: Mistral 7B (quantized)
-- **16GB RAM**: Llama 3 8B (recommended)
-- **GPU (8GB VRAM)**: Llama 3 8B at full speed
+---
 
 ## Observability
 
-Two-tier observability strategy:
-
-**LangSmith (LLM-level tracing)** (set `LANGCHAIN_API_KEY` in `.env` to enable):
-- Every LLM call traced automatically (prompt, response, token count, latency)
-- Agents use `langchain_groq.ChatGroq`, a LangChain Runnable, so tracing is zero-config
-- Full LangGraph pipeline run visible as a parent trace with per-agent child spans
+**LangSmith (LLM-level tracing)** — set `LANGCHAIN_API_KEY` in `.env`:
+- Every LLM call traced automatically: prompt, response, token count, latency
+- Using ChatGroq (LangChain Runnable) means zero manual instrumentation
+- Full LangGraph pipeline run visible as parent trace with per-agent child spans
 - Hallucination warnings surfaced as events on the trace
 
 **Custom metrics (business-level)**:
-- **Dashboard** at `GET /`: pipeline log, latency, lead quality, live run status
-- **Metrics API** at `GET /metrics`: JSONL-backed aggregated pipeline stats
-- Structured JSON logs in `data/logs/app.log` with 8-char correlation IDs per run
+- `GET /metrics`: JSONL-backed pipeline stats (latency, lead counts, scores)
+- Structured JSON logs in `data/logs/app.log` with correlation IDs per run
 - Each agent logs decisions to `state["messages"]` (visible in dashboard log panel)
-- Hallucination prevention via RAG grounding on all product claims
-- Lead quality tracked via `qualification_score` distribution
+
+---
 
 ## API Reference
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/` | GET | **Dashboard UI** (lead cards, pipeline runner, metrics) |
-| `/generate-leads` | POST | Run full multi-agent pipeline (async if worker running, sync fallback) |
-| `/pipeline-status/{run_id}` | GET | Poll Celery task state: PENDING / STARTED / SUCCESS / FAILURE |
+| `/` | GET | Dashboard UI |
+| `/generate-leads` | POST | Run full pipeline (async if worker running, sync fallback) |
+| `/pipeline-status/{run_id}` | GET | Poll Celery task: PENDING / STARTED / SUCCESS / FAILURE |
 | `/leads` | GET | Retrieve stored leads (`?status=outreach_ready`) |
-| `/leads/pending-review` | GET | List leads awaiting human approval via Slack |
-| `/leads/{id}/approve` | POST | Approve a lead, moves status to `outreach_ready` |
-| `/leads/{id}/reject` | POST | Reject a lead, moves status to `disqualified` |
-| `/ingest-knowledge` | POST | Build RAG from humanmaximizer.com |
+| `/leads/pending-review` | GET | Leads awaiting human approval |
+| `/leads/{id}/approve` | GET + POST | Approve a lead → `outreach_ready` |
+| `/leads/{id}/reject` | GET + POST | Reject a lead → `disqualified` |
+| `/ingest-knowledge` | POST | Build RAG knowledge base from humanmaximizer.com |
+| `/flush-cache` | POST | Clear Redis dedup cache + Celery results for a fresh run |
 | `/metrics` | GET | Pipeline observability summary |
-| `/health` | GET | Dependency health check (Redis, model, embeddings) |
-| `/docs` | GET | Swagger UI (interactive API docs) |
+| `/health` | GET | Dependency health check (Redis, model config) |
+| `/docs` | GET | Swagger UI |
 
-## Scaling
+---
 
-- Each agent is stateless, so horizontal scaling is straightforward
-- ChromaDB can be swapped for pgvector (PostgreSQL) at scale via `USE_PGVECTOR=true`
-- Celery + Redis for async lead processing under concurrent load
-- Dashboard is a single static HTML file (can be deployed to any CDN)
+## Model Selection
+
+Using **Llama 3.1 8B** (Meta, open-source) via **Groq** (LPU inference hardware):
+- Open-source model — satisfies the assignment requirement
+- Groq is the inference engine, not the model provider
+- 8192 token context window
+- Sub-second response time via Groq's LPU
+- Free tier: 14,400 requests/day
+
+| Model | JSON | Reasoning | Verdict |
+|-------|------|-----------|---------|
+| **Llama 3.1 8B** ✅ | ✅ Very good | ✅ Best in class | **Our choice** |
+| Mistral 7B | ✅ Excellent | ⚠️ Good | Best if RAM < 8GB |
+| Phi-3 Mini 3.8B | ⚠️ Struggles | ❌ Weak | Too small |
+| Mixtral 8x7B | ✅ Best | ✅ Best | Needs GPU workstation |
+
+### Running Locally with Ollama (no Groq)
+
+```python
+# agents/base.py
+from langchain_ollama import ChatOllama
+llm = ChatOllama(model="llama3", temperature=temperature)
+```
+
+Everything else (retry logic, caching, LangSmith tracing) stays the same since both are LangChain Runnables.
+
+---
+
+## Fine-Tuning Roadmap
+
+The Slack approval workflow is the data collection mechanism. Every Approve/Reject click is a labeled training example. When 200+ labeled leads accumulate:
+
+- Dataset format: Llama 3 chat template format (not raw prompt/completion strings)
+- Method: QLoRA on Llama 3.1 8B via Unsloth (4-bit quantization, ~16GB VRAM)
+- Benefit: qualification scores grounded in your specific customer profile
+
+See `FINE_TUNING.md` for the complete training setup and evaluation guide.
+
+---
+
+## Scaling Notes
+
+- Each agent is stateless → horizontal scaling straightforward
+- ChromaDB → pgvector at scale via `USE_PGVECTOR=true`
+- Celery + Redis for async processing under concurrent load
+- Dashboard is a single static HTML file → deployable to any CDN
 - Docker Compose today, Kubernetes when needed
+- At Prometheus scale: expose `/metrics` as Prometheus endpoint, add Grafana dashboards for latency per agent, token counts, qualification pass rates

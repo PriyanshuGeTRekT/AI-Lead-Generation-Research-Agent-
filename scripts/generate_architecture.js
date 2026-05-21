@@ -261,7 +261,7 @@ function dashedLine(slide, x, y, w, h) {
 
   // ── Source boxes (left half, above Research Agent) ──
   // Three compact boxes whose centers all fall within Research Agent width
-  const srcLabels = ["DuckDuckGo", "Naukri.com", "Indeed.in"];
+  const srcLabels = ["Serper.dev", "Naukri.com", "Indeed.in"];
   const srcX = [0.4, 1.78, 3.16];
   const srcW = 1.2;
   const srcCY = 1.05; // top-left y of source boxes
@@ -357,7 +357,7 @@ function dashedLine(slide, x, y, w, h) {
   const s = lightSlide();
   addLightTitle(s, "Multi-Source Lead Discovery");
 
-  s.addText("HR job postings are a buying signal. Companies actively hiring HR staff have active HR budgets.", {
+  s.addText("HR job postings = buying signal. Serper.dev gives real Google results; Naukri & Indeed surface active hiring intent.", {
     x: 0.5, y: 0.98, w: 9, h: 0.4,
     fontSize: 13,
     color: C.mutedDark,
@@ -368,9 +368,9 @@ function dashedLine(slide, x, y, w, h) {
   const sources = [
     {
       x: 0.4,
-      header: "DuckDuckGo Search",
-      body: "Keyword-based company discovery. Fast, no API key required, covers news and directories.",
-      tag: "Keyword Search",
+      header: "Serper.dev (Google)",
+      body: "Real Google Search via API. India geo-targeted (gl=in). Domain blocklist filters aggregators. 2,500 free queries.",
+      tag: "Google Search API",
     },
     {
       x: 3.45,
@@ -1019,7 +1019,7 @@ function dashedLine(slide, x, y, w, h) {
     ["LLM", "Llama 3.1 70B (via Groq API)"],
     ["LLM Client", "langchain_groq.ChatGroq"],
     ["Orchestration", "LangGraph StateGraph (Supervisor pattern)"],
-    ["Lead Sources", "DuckDuckGo, Naukri.com, Indeed.in"],
+    ["Lead Sources", "Serper.dev (Google Search API), Naukri.com, Indeed.in"],
     ["Structured Output", "Pydantic v2 + .with_structured_output()"],
     ["Vector Store", "ChromaDB (default) / pgvector (production)"],
     ["Embeddings", "all-MiniLM-L6-v2 (sentence-transformers)"],

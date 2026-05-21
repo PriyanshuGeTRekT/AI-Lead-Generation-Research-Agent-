@@ -1,6 +1,6 @@
 # Fine-Tuning Strategy for the Qualification Agent
 
-The current system uses few-shot prompting with RAG to score leads. `QualificationAgent` retrieves the top 4 chunks from the ChromaDB HRMS knowledge base, injects them into `QUALIFICATION_PROMPT`, and calls `llama3-8b-8192` via Groq to get back a `QualificationResult` (score, reasoning, key_signals, recommended_action). This works well at launch because you have no labeled data yet. RAG grounding keeps scores coherent with actual product features and prevents hallucinated capabilities. Fine-tuning only pays off once you have enough human-labeled examples from your actual sales context - real decisions made by people who know your ICP, not synthetic examples.
+The current system uses few-shot prompting with RAG to score leads. `QualificationAgent` retrieves the top 4 chunks from the ChromaDB HRMS knowledge base, injects them into `QUALIFICATION_PROMPT`, and calls `llama-3.1-8b-instant` via Groq to get back a `QualificationResult` (score, reasoning, key_signals, recommended_action). This works well at launch because you have no labeled data yet. RAG grounding keeps scores coherent with actual product features and prevents hallucinated capabilities. Fine-tuning only pays off once you have enough human-labeled examples from your actual sales context — real decisions made by people who know your ICP, not synthetic examples.
 
 ---
 
@@ -10,7 +10,7 @@ Fine-tuning the qualification agent is worth the effort when all three of these 
 
 **1. You have 200+ human-labeled decisions from actual sales reps.**
 
-Not just any 200 examples. They need to come from people who understand your ICP: what "good" looks like for HumanMaximizer HRMS, which industries you close, which company sizes stall in procurement. Every Approve/Reject click in Slack is one labeled example. At 5-10 leads per run and a few runs per week, you reach 200 examples in 2-4 months of real usage.
+Not just any 200 examples. They need to come from people who understand your ICP: what "good" looks like for HumanMaximizer HRMS, which industries you close, which company sizes stall in procurement. Every Approve/Reject click in Slack is one labeled example. At 5–10 leads per run and a few runs per week, you reach 200 examples in 2–4 months of real usage.
 
 **2. The RAG-based scores are systematically wrong for your market.**
 
@@ -29,7 +29,7 @@ If you are at fewer than 200 labeled examples, stay on the current setup. The pr
 The Slack review step in `notifications/slack.py` is already your data collection mechanism. When a sales rep clicks Approve or Reject on the Slack message, that decision is a labeled training example:
 
 - The lead info sent to `QUALIFICATION_PROMPT` is the **prompt**
-- The LLM's `QualificationResult` (score, reasoning, key_signals) plus the human's Approve/Reject decision is the **completion**
+- The LLM's `QualificationResult` (`score`, `reasoning`, `key_signals`) plus the human's Approve/Reject decision is the **completion**
 
 You need to log both at the time of the Slack interaction. The approve/reject endpoints at `/leads/{lead_id}/approve` and `/leads/{lead_id}/reject` should write the full example to a JSONL file.
 
@@ -54,7 +54,9 @@ Use the Llama 3 chat template format. Unsloth expects conversations, not raw pro
 
 The `"from": "gpt"` label is Unsloth's convention for the assistant turn, even when you are training Llama. `get_chat_template("llama-3")` maps it to the correct Llama 3 special tokens at tokenization time.
 
-Store one JSON object per line in `data/training_leads.jsonl`. When a human Rejects a lead the LLM scored 7+, that is an especially valuable example because it shows the model where its confidence was wrong. Include those - they are more informative than the easy cases.
+Note the field names in the completion: `score`, `reasoning`, `key_signals`, `recommended_action` — these must match the `QualificationResult` Pydantic schema exactly. Using the wrong field names here would cause the fine-tuned model to return wrong keys, just like the prompt/schema mismatch that was fixed during development.
+
+Store one JSON object per line in `data/training_leads.jsonl`. When a human Rejects a lead the LLM scored 7+, that is an especially valuable example because it shows the model where its confidence was wrong. Include those — they are more informative than the easy cases.
 
 ---
 
@@ -62,7 +64,7 @@ Store one JSON object per line in `data/training_leads.jsonl`. When a human Reje
 
 ### Hardware
 
-You need a GPU with at least 16GB VRAM. An RTX 3090 (24GB) works fine for Llama 3.1 8B with QLoRA. With 4-bit quantization, the base model weights take roughly 5GB, leaving ~11GB for LoRA adapter parameters and optimizer state. An A100 40GB is faster but not required for 200-500 examples.
+You need a GPU with at least 16GB VRAM. An RTX 3090 (24GB) works fine for Llama 3.1 8B with QLoRA. With 4-bit quantization, the base model weights take roughly 5GB, leaving ~11GB for LoRA adapter parameters and optimizer state. An A100 40GB is faster but not required for 200–500 examples.
 
 ### Install
 
@@ -80,7 +82,7 @@ pip install unsloth[cu121]
 ### Training Script
 
 ```python
-from unsloth import FastLanguageModel
+from unsloth import FastLanguageModel, get_chat_template
 from trl import SFTTrainer
 from transformers import TrainingArguments
 from datasets import Dataset
@@ -128,9 +130,9 @@ tokenizer.save_pretrained("./fine_tuned_qualification")
 
 ### Key Hyperparameters
 
-- `r=16`: LoRA rank; higher means more trainable parameters and better quality but more VRAM. 16 is the right default for 200-500 examples.
+- `r=16`: LoRA rank; higher means more trainable parameters and better quality but more VRAM. 16 is the right default for 200–500 examples.
 - `lora_alpha=32`: scaling factor applied to LoRA updates; convention is 2x the rank.
-- `num_train_epochs=3`: enough passes for 200-500 examples without memorizing them. Go to 5 only if eval loss keeps dropping.
+- `num_train_epochs=3`: enough passes for 200–500 examples without memorizing them. Go to 5 only if eval loss keeps dropping.
 - `learning_rate=2e-4`: standard QLoRA rate. Drop to 1e-4 if training loss oscillates.
 - `target_modules=["q_proj", "v_proj"]`: adapts the query and value projections, which control how attention weights are computed. This is where scoring calibration lives.
 
@@ -140,7 +142,7 @@ tokenizer.save_pretrained("./fine_tuned_qualification")
 
 After training you have a LoRA adapter saved to `./fine_tuned_qualification`. You need to serve it locally and point the pipeline at it. Two options:
 
-### Option A - Ollama (easiest for development)
+### Option A — Ollama (easiest for development)
 
 Convert the merged model to GGUF format and load it into Ollama:
 
@@ -169,9 +171,9 @@ llm = ChatOllama(model="qualification-agent", temperature=0.1)
 
 The `GROQ_MODEL` env var becomes irrelevant for the qualification step. You can keep Groq for the Sales Agent (email writing) and run the qualification model locally.
 
-### Option B - vLLM (for production)
+### Option B — vLLM (for production)
 
-vLLM serves the fine-tuned model behind an OpenAI-compatible API endpoint, which means `ChatGroq` can be swapped for `ChatOpenAI` pointing at your local server with zero other code changes:
+vLLM serves the fine-tuned model behind an OpenAI-compatible API endpoint:
 
 ```bash
 python -m vllm.entrypoints.openai.api_server \
@@ -180,14 +182,7 @@ python -m vllm.entrypoints.openai.api_server \
   --served-model-name qualification-agent
 ```
 
-In `.env`, point the qualification config at the local server:
-
-```
-GROQ_API_KEY=not-needed
-GROQ_MODEL=qualification-agent
-```
-
-And update `agents/base.py` to use `ChatOpenAI` with `base_url="http://localhost:8001/v1"` for the qualification path. The `QualificationResult` structured output schema in `models/schemas.py` does not change.
+Update `agents/base.py` to use `ChatOpenAI` with `base_url="http://localhost:8001/v1"` for the qualification path. The `QualificationResult` structured output schema in `models/schemas.py` does not change — field names `score`, `reasoning`, `key_signals`, `recommended_action` remain identical.
 
 ---
 
@@ -197,13 +192,13 @@ Before deploying the fine-tuned model, verify it is actually better than the bas
 
 **Split your labeled data**: hold out 20% of examples before training. If you have 250 labeled leads, train on 200, test on 50. The test set should be random, not chronologically last (recent leads may be from a different campaign with different characteristics).
 
-**Primary metric**: on the 50 held-out examples, what percentage of the fine-tuned model's qualification decisions (Approve if score >= 5.0, Reject if score < 5.0) match the human decision? Compare this against the same metric for the current RAG-only baseline on the same 50 examples.
+**Primary metric**: on the 50 held-out examples, what percentage of the fine-tuned model's qualification decisions (Approve if score ≥ 5.0, Reject if score < 5.0) match the human decision? Compare this against the same metric for the current RAG-only baseline on the same 50 examples.
 
-**Focus on the edge cases**: leads where the LLM scored 4.0-6.0. These are where RAG-based reasoning is weakest because the signal is ambiguous. Fine-tuning should move the needle most in this range. If the fine-tuned model is more accurate on scores 4-6 but the same on clear accepts and clear rejects, that is still a win - those borderline cases are where human review time is spent.
+**Focus on the edge cases**: leads where the LLM scored 4.0–6.0. These are where RAG-based reasoning is weakest because the signal is ambiguous. Fine-tuning should move the needle most in this range. If the fine-tuned model is more accurate on scores 4–6 but the same on clear accepts and clear rejects, that is still a win — those borderline cases are where human review time is spent.
 
-**Check score distribution**: after deploying the fine-tuned model, compare the distribution of qualification scores across 2-3 runs against the baseline distribution. If the fine-tuned model starts scoring everything 7+ or 3-, it has overfit to a subset of your training data. The distribution should look similar to the baseline with shifts in the segments where the baseline was wrong.
+**Check score distribution**: after deploying the fine-tuned model, compare the distribution of qualification scores across 2–3 runs against the baseline distribution. If the fine-tuned model starts scoring everything 7+ or 3–, it has overfit to a subset of your training data.
 
-**Track close rate by cohort**: the only real validation is whether more Approved leads convert. Tag leads processed by the fine-tuned model separately in the data store and check conversion rate in 30-60 days. A higher close rate on approved leads means the model learned your ICP correctly.
+**Track close rate by cohort**: the only real validation is whether more Approved leads convert. Tag leads processed by the fine-tuned model separately in the data store and check conversion rate in 30–60 days. A higher close rate on approved leads means the model learned your ICP correctly.
 
 ---
 
@@ -213,6 +208,6 @@ Only the Qualification Agent benefits from fine-tuning. The other two agents sho
 
 **Sales Agent (email writing)**: each outreach email is personalized to a specific lead's pain points and context. The email content that works for Mahindra manufacturing is different from what works for a Bengaluru SaaS startup. RAG-grounded prompts with `temperature=0.4` (your current `llm_temperature_creative` setting) handle this well. Fine-tuning email writing would bake in stylistic patterns that get stale as your messaging evolves.
 
-**Research Agent (extraction)**: the `LeadExtraction` schema is deterministic - company name, industry, employee count, location, decision maker. Structured output with `llm.with_structured_output(LeadExtraction)` at `temperature=0.1` already produces reliable extraction. There is no subjective judgment in extraction that fine-tuning would improve.
+**Research Agent (extraction)**: the `LeadExtraction` schema is deterministic — company name, industry, employee count, location, decision maker. Structured output with `llm.with_structured_output(LeadExtraction)` at `temperature=0.1` already produces reliable extraction. There is no subjective judgment in extraction that fine-tuning would improve.
 
 Qualification is the one agent where the output is inherently subjective and domain-specific. The score a generic LLM assigns to a 40,000-person Indian manufacturing conglomerate is not the same as the score your best sales rep would assign. That gap is exactly what fine-tuning closes.
