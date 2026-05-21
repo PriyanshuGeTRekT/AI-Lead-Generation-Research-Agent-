@@ -14,7 +14,7 @@ import json
 import uuid
 from graph.state import LeadState
 from agents.base import BaseAgent
-from tools.web_search import search_companies_multi_source, scrape_company_info
+from tools.web_search import search_companies_multi_source, scrape_company_info, scrape_company_contacts
 from cache.redis_client import is_duplicate_lead, mark_lead_seen
 from rag.hallucination_guard import guard_llm_response
 from observability.langsmith_tracer import stage_timer, log_hallucination_event
@@ -22,11 +22,11 @@ from core.config import get_settings
 
 settings = get_settings()
 
-RESEARCH_PROMPT = """You are a B2B lead research specialist.
-Given search results about companies, extract structured lead information.
+RESEARCH_PROMPT = """You are a B2B lead research specialist identifying companies that need HRMS software.
 
-Focus on companies that could benefit from HRMS (Human Resource Management Software).
-Look for: company name, website, industry, size, location, and what they do.
+IMPORTANT: Extract ONLY companies that BUY or USE HR software (manufacturers, retailers, IT firms,
+logistics companies, hospitals, schools, startups, etc.). Do NOT extract companies that SELL
+HR/payroll/HRMS software — those are competitors, not prospects.
 
 Search Results:
 {search_results}
@@ -38,17 +38,23 @@ Extract lead information and respond with a JSON object ONLY (no explanation):
 {{
   "company_name": "...",
   "website": "...",
-  "industry": "...",
-  "size": "...(e.g. 50-200 employees)",
-  "location": "...",
+  "industry": "...(their actual business, NOT 'HRMS software')",
+  "size": "...(e.g. 200 employees, 500+ staff — look for headcount mentions)",
+  "location": "...(city and state if found, e.g. Mumbai, Maharashtra)",
+  "address": "...(physical office address if mentioned, else empty string)",
   "description": "...(what the company does, 2-3 sentences)",
-  "decision_makers": ["...", "..."],
-  "contact_emails": [],
-  "pain_points": ["...", "...(likely HR challenges they face)"],
+  "decision_makers": ["...(names or titles like HR Manager, CEO found on site)"],
+  "contact_emails": ["...(any business email addresses found on the site)"],
+  "pain_points": ["...(likely HR challenges they face based on their industry/size)"],
   "status": "researched"
 }}
 
-If you cannot extract valid company info, return: {{"status": "invalid"}}
+Rules:
+- contact_emails: list every email address you can find in the content (look for @domain patterns)
+- address: copy any physical office address found verbatim
+- decision_makers: include names if found, else job titles (HR Manager, CEO, etc.)
+- If this company sells HRMS/payroll/HR software itself, return: {{"status": "invalid"}}
+- If you cannot extract valid company info, return: {{"status": "invalid"}}
 """
 
 
@@ -86,12 +92,15 @@ class ResearchAgent(BaseAgent):
         for result in valid_results:
             url = result.get("url", "")
 
-            # Scrape website content
+            # Scrape homepage + contact page text for LLM
             scraped = scrape_company_info(url)
+
+            # Regex-extract contacts from raw HTML (independent of LLM)
+            contacts = scrape_company_contacts(url)
 
             prompt = RESEARCH_PROMPT.format(
                 search_results=json.dumps(result, indent=2),
-                scraped_content=scraped[:1500],
+                scraped_content=scraped,
             )
 
             try:
@@ -103,6 +112,16 @@ class ResearchAgent(BaseAgent):
                     continue
 
                 company_name = lead_data.get("company_name", "")
+
+                # Merge regex-extracted contacts with LLM-extracted ones
+                llm_emails = lead_data.get("contact_emails") or []
+                merged_emails = list(dict.fromkeys(llm_emails + contacts["emails"]))  # dedup, preserve order
+                lead_data["contact_emails"] = merged_emails
+
+                if contacts["phone"] and not lead_data.get("phone"):
+                    lead_data["phone"] = contacts["phone"]
+                if contacts["address"] and not lead_data.get("address"):
+                    lead_data["address"] = contacts["address"]
 
                 # Deduplication: skip if processed in last 24 hours
                 if is_duplicate_lead(company_name):

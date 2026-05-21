@@ -1,12 +1,43 @@
 import os
+import re
 import time
 import json
 import requests
-from typing import List, Dict
-from urllib.parse import urlparse
+from typing import List, Dict, Tuple
+from urllib.parse import urlparse, urljoin
 from loguru import logger
 from tools.naukri_scraper import search_naukri_companies
 from tools.indeed_scraper import search_indeed_companies
+
+# ── Contact extraction helpers ─────────────────────────────────────────────────
+
+_EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+_PHONE_RE = re.compile(
+    r"(?:\+91[\s\-]?)?(?:\(?0?\d{2,4}\)?[\s\-]?)?\d{5}[\s\-]?\d{5}"
+)
+# Domains to skip for email extraction (generic providers aren't company contacts)
+_SKIP_EMAIL_DOMAINS = {"gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "example.com"}
+
+
+def extract_emails(text: str) -> List[str]:
+    """Extract unique business email addresses from raw text."""
+    found = _EMAIL_RE.findall(text)
+    seen = []
+    for e in found:
+        e = e.lower().strip(".")
+        domain = e.split("@")[-1]
+        if domain not in _SKIP_EMAIL_DOMAINS and e not in seen:
+            seen.append(e)
+    return seen[:5]  # cap at 5
+
+
+def extract_phone(text: str) -> str:
+    """Extract first plausible Indian phone number from text."""
+    match = _PHONE_RE.search(text)
+    if match:
+        # Normalise whitespace/dashes
+        return re.sub(r"[\s\-]+", "-", match.group()).strip()
+    return ""
 
 SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
 
@@ -63,12 +94,15 @@ def _search_serper(keyword: str, max_results: int = 10) -> List[Dict]:
     Returns results in the same format as the old DuckDuckGo function.
     Free tier: 2,500 queries. No credit card required.
     """
-    # Build a targeted query — ask for the company's own site, not lists
-    # Strip trailing "company India" if already present in keyword to avoid redundancy
+    # Build a buyer-targeted query.
+    # We want companies that USE HRMS software, not ones that sell it.
+    # Exclude known HRMS vendor terms so we don't surface competitors.
     kw_clean = keyword.strip()
     if "india" not in kw_clean.lower():
         kw_clean = f"{kw_clean} India"
-    query = f"{kw_clean} official website"
+    # Exclude aggregators and HRMS vendors from results
+    exclusions = '-site:greythr.com -site:darwinbox.com -site:keka.com -site:zoho.com -site:sumhr.com -"HRMS software company" -"HR software provider"'
+    query = f"{kw_clean} company official website {exclusions}"
     try:
         response = requests.post(
             "https://google.serper.dev/search",
@@ -320,22 +354,86 @@ def search_companies_multi_source(keyword: str) -> List[Dict]:
     return deduped
 
 
+def _fetch_text(url: str, timeout: int = 8) -> Tuple[str, str]:
+    """
+    Fetch a URL and return (raw_html, clean_text).
+    Keeps footer in the text so emails/phones in footer are captured.
+    """
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; LeadGenBot/1.0)"}
+    resp = requests.get(url, headers=headers, timeout=timeout)
+    resp.raise_for_status()
+    raw_html = resp.text
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(raw_html, "html.parser")
+    # Remove only scripts and styles — keep footer (it has contact info)
+    for tag in soup(["script", "style", "nav"]):
+        tag.decompose()
+    text = soup.get_text(separator=" ", strip=True)
+    return raw_html, text
+
+
 def scrape_company_info(url: str) -> str:
     """
-    Scrape basic info from a company website.
-    Returns raw text content (truncated).
+    Scrape homepage + contact page of a company website.
+    Returns combined clean text (up to 4000 chars) for LLM consumption.
     """
+    combined_text = ""
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resp = requests.get(url, headers=headers, timeout=8)
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        # Remove scripts and styles
-        for tag in soup(["script", "style", "nav", "footer"]):
-            tag.decompose()
-
-        text = soup.get_text(separator=" ", strip=True)
-        return text[:3000]  # Limit to 3000 chars
+        _, homepage_text = _fetch_text(url)
+        combined_text += homepage_text
     except Exception as e:
-        return f"Could not scrape {url}: {e}"
+        combined_text += f"Could not scrape {url}: {e}"
+
+    # Also try common contact page paths
+    for path in ["/contact", "/contact-us", "/about", "/about-us"]:
+        try:
+            contact_url = urljoin(url.rstrip("/"), path)
+            _, contact_text = _fetch_text(contact_url, timeout=6)
+            combined_text += "\n" + contact_text
+            break  # stop after first successful contact page
+        except Exception:
+            continue
+
+    return combined_text[:4000]
+
+
+def scrape_company_contacts(url: str) -> Dict:
+    """
+    Extract emails, phone numbers, and address from a company website.
+    Scans homepage + contact page raw HTML before BeautifulSoup strips anything.
+    Returns dict: {emails, phone, address_hint}
+    """
+    all_emails: List[str] = []
+    all_phones: List[str] = []
+    address_hint = ""
+
+    for path in ["", "/contact", "/contact-us", "/about", "/about-us"]:
+        target = urljoin(url.rstrip("/"), path) if path else url
+        try:
+            raw_html, clean_text = _fetch_text(target, timeout=6)
+            # Extract from raw HTML (catches mailto: links too)
+            all_emails += extract_emails(raw_html)
+            phone = extract_phone(clean_text)
+            if phone and not all_phones:
+                all_phones.append(phone)
+            # Simple address hint: look for "Address:" or pin code patterns
+            if not address_hint:
+                addr_match = re.search(
+                    r"(?:Address|Office|Location)[:\s]+([^\n<]{10,120})", clean_text, re.I
+                )
+                if addr_match:
+                    address_hint = addr_match.group(1).strip()
+        except Exception:
+            continue
+
+    # Deduplicate emails
+    seen = []
+    for e in all_emails:
+        if e not in seen:
+            seen.append(e)
+
+    return {
+        "emails": seen[:5],
+        "phone": all_phones[0] if all_phones else "",
+        "address": address_hint,
+    }

@@ -10,6 +10,8 @@ class Lead(TypedDict):
     industry: str
     size: Optional[str]
     location: Optional[str]
+    address: Optional[str]                   # Physical office address if found
+    phone: Optional[str]                     # Contact phone number if found
     description: Optional[str]
     decision_makers: Optional[List[str]]
     contact_emails: Optional[List[str]]

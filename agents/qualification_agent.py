@@ -27,7 +27,23 @@ def _score_bar(score: float) -> str:
     return "█" * filled + "░" * empty
 
 
-QUALIFICATION_PROMPT = """You are a B2B sales qualification expert for an HRMS software company.
+# Industries that indicate the company SELLS HR software (competitors, not prospects)
+_HRMS_VENDOR_KEYWORDS = {
+    "hrms software", "hr software", "payroll software", "hris", "hcm software",
+    "human resource software", "hr saas", "hr platform", "hr tech", "hrtech",
+    "workforce management software", "attendance software",
+}
+
+
+def _is_hrms_vendor(lead: dict) -> bool:
+    """Return True if this company sells HRMS/HR software (i.e., is a competitor)."""
+    industry = (lead.get("industry") or "").lower()
+    description = (lead.get("description") or "").lower()
+    combined = industry + " " + description
+    return any(kw in combined for kw in _HRMS_VENDOR_KEYWORDS)
+
+
+QUALIFICATION_PROMPT = """You are a B2B sales qualification expert for an HRMS software company called HumanMaximizer.
 
 Your product knowledge (from our HRMS product, use ONLY this, do not fabricate features):
 {rag_context}
@@ -36,18 +52,21 @@ Company to qualify:
 {lead_info}
 
 Score this lead from 0-10 based on:
-- Likelihood they need HRMS software (employee management, payroll, attendance, recruitment)
-- Company size (10-500 employees is ideal)
-- Industry fit (any industry with significant workforce)
-- Growth signals (hiring, expanding)
+- Likelihood they NEED HRMS software (employee management, payroll, attendance, recruitment)
+- Company size (10-1000 employees is ideal; larger is fine)
+- Industry fit (any industry with significant workforce: manufacturing, retail, IT services, logistics, healthcare, education, etc.)
+- Growth signals (hiring, expanding, new offices)
 - Decision maker accessibility
+
+CRITICAL RULE: If the company SELLS HR software, HRMS, payroll software, or is an HR tech vendor,
+they are a COMPETITOR — score them 1 and set recommended_action to "disqualify (competitor)".
 
 Respond with JSON ONLY:
 {{
   "score": <float 0-10>,
   "reasoning": "...(2-3 sentences explaining the score)",
   "key_signals": ["...", "...", "..."],
-  "recommended_action": "...(how to approach this lead)"
+  "recommended_action": "...(how to approach this lead, or 'disqualify (competitor)' if they sell HR software)"
 }}
 """
 
@@ -69,6 +88,28 @@ class QualificationAgent(BaseAgent):
         for lead in researched:
             company_name = lead.get("company_name", "Unknown")
             self.log.info(f"Scoring: {company_name}")
+
+            # Fast-path: auto-disqualify competitors (companies that sell HRMS software)
+            if _is_hrms_vendor(lead):
+                self.log.info(f"Auto-disqualified competitor: {company_name}")
+                lead["qualification_score"] = 1.0
+                lead["qualification_reason"] = (
+                    f"{company_name} is an HRMS/HR software vendor — a competitor, not a prospect. "
+                    "They already have their own HR solution and are not a sales target."
+                )
+                lead["key_signals"] = ["sells HR/HRMS software", "competitor"]
+                lead["recommended_action"] = "disqualify (competitor)"
+                lead["status"] = "disqualified"
+                lead["summary"] = (
+                    f"{company_name}  |  {lead.get('industry', '')}  |  "
+                    f"{lead.get('location', '')}  |  {lead.get('size', '')}\n"
+                    f"Score: 1.0/10  █░░░░░░░░░\n"
+                    f"COMPETITOR — sells HRMS software, not a prospect.\n"
+                    f"Key signals: sells HR/HRMS software · competitor\n"
+                    f"Decision maker: N/A"
+                )
+                disqualified_leads.append(lead)
+                continue
 
             # RAG retrieval for grounding
             description = lead.get("description", "") + " " + " ".join(lead.get("pain_points", []))
