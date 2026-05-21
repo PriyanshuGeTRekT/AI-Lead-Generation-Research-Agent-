@@ -18,8 +18,6 @@ import requests
 from typing import List, Dict, Tuple
 from urllib.parse import urlparse, urljoin
 from loguru import logger
-from tools.naukri_scraper import search_naukri_companies
-from tools.indeed_scraper import search_indeed_companies
 from core.config import get_settings as _get_settings
 
 # ── Contact extraction helpers ─────────────────────────────────────────────────
@@ -345,35 +343,49 @@ def search_companies(keyword: str, max_results: int = 80) -> List[Dict]:
 
 def search_companies_multi_source(keyword: str, max_results: int = 80) -> List[Dict]:
     """
-    Fan-out search: Serper (broad) + Naukri + Indeed.
-    Merges and deduplicates by root domain.
+    Fan-out search: Serper (broad multi-query) + Instantly.ai (B2B contact DB).
+    Merges and deduplicates by root domain / company name.
+
+    Instantly leads are placed FIRST because they come with pre-verified contact
+    data (DM name, email, LinkedIn) so the research agent can skip redundant
+    LinkedIn enrichment for those leads.
     """
+    # --- Instantly.ai Lead Finder (structured B2B contact data) ---
+    try:
+        from tools.instantly_client import search_instantly_leads
+        instantly_results = search_instantly_leads(keyword, max_results=min(30, max_results // 2))
+    except Exception as e:
+        logger.warning(f"[MultiSource] Instantly search failed: {e}")
+        instantly_results = []
+
+    # --- Serper (Google Search, diversified queries) ---
     serper_results = search_companies(keyword, max_results=max_results)
 
-    naukri_results = search_naukri_companies()
-    indeed_results = search_indeed_companies()
+    instantly_count = len(instantly_results)
+    serper_count    = len(serper_results)
 
-    serper_count = len(serper_results)
-    naukri_count = len(naukri_results)
-    indeed_count = len(indeed_results)
-
-    all_results = serper_results + naukri_results + indeed_results
+    # Instantly first (richer data), then Serper
+    all_results = instantly_results + serper_results
 
     seen_domains: set = set()
     deduped: List[Dict] = []
     for item in all_results:
         url = item.get("url", "")
         if not url:
-            deduped.append(item)
+            # No URL — include if it has at least a title (Instantly company-only results)
+            if item.get("title"):
+                deduped.append(item)
             continue
         domain = _get_domain(url)
         if domain and domain not in seen_domains:
             seen_domains.add(domain)
             deduped.append(item)
+        elif not domain:
+            deduped.append(item)
 
     logger.info(
-        f"[MultiSource] {serper_count} serper + {naukri_count} naukri + "
-        f"{indeed_count} indeed = {len(deduped)} unique candidates"
+        f"[MultiSource] {instantly_count} instantly + {serper_count} serper "
+        f"= {len(deduped)} unique candidates for '{keyword}'"
     )
     return deduped
 

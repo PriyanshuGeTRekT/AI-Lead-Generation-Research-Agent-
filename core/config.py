@@ -63,6 +63,7 @@ class Settings(BaseSettings):
 
     # ── Web Search ────────────────────────────────────────────────────────────
     serper_api_key: str = ""             # Serper.dev Google Search API key (optional)
+    instantly_api_key: str = ""          # Instantly.ai Lead Finder API key (optional, 1k free credits)
 
     # ── Human-in-the-Loop (Slack) ─────────────────────────────────────────────
     slack_webhook_url: str = ""          # Slack Incoming Webhook URL (optional)

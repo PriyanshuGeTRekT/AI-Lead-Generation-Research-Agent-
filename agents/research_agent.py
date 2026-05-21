@@ -122,19 +122,33 @@ class ResearchAgent(BaseAgent):
                 if contacts["address"] and not lead_data.get("address"):
                     lead_data["address"] = contacts["address"]
 
-                # LinkedIn decision maker enrichment
-                domain = url.replace("https://", "").replace("http://", "").split("/")[0]
-                dm = enrich_decision_maker(lead_data.get("company_name", ""), domain)
-                lead_data["decision_maker_name"] = dm.get("name", "")
-                lead_data["decision_maker_full_name"] = dm.get("full_name", "")
-                lead_data["decision_maker_title"] = dm.get("title", "")
-                lead_data["decision_maker_linkedin"] = dm.get("linkedin_url", "")
-                # Merge inferred email guesses with regex-found emails
-                all_emails = list(dict.fromkeys(
-                    lead_data.get("contact_emails", []) + dm.get("email_guesses", [])
-                ))
-                lead_data["contact_emails"] = all_emails
-                lead_data["email_guesses"] = dm.get("email_guesses", [])
+                # LinkedIn decision maker enrichment.
+                # Skip if Instantly.ai already pre-filled the DM data —
+                # no need to spend Serper credits finding what we already have.
+                instantly_dm_name = result.get("dm_name", "")
+                instantly_dm_email = result.get("dm_email", "")
+                if instantly_dm_name:
+                    lead_data["decision_maker_name"] = instantly_dm_name.split()[0] if instantly_dm_name else ""
+                    lead_data["decision_maker_full_name"] = instantly_dm_name
+                    lead_data["decision_maker_title"] = result.get("dm_title", "")
+                    lead_data["decision_maker_linkedin"] = result.get("dm_linkedin", "")
+                    if instantly_dm_email:
+                        merged_emails = list(dict.fromkeys([instantly_dm_email] + lead_data.get("contact_emails", [])))
+                        lead_data["contact_emails"] = merged_emails
+                    lead_data["email_guesses"] = []
+                    self.log.debug(f"[Instantly] Pre-filled DM for {lead_data.get('company_name','')}: {instantly_dm_name}")
+                else:
+                    domain = url.replace("https://", "").replace("http://", "").split("/")[0]
+                    dm = enrich_decision_maker(lead_data.get("company_name", ""), domain)
+                    lead_data["decision_maker_name"] = dm.get("name", "")
+                    lead_data["decision_maker_full_name"] = dm.get("full_name", "")
+                    lead_data["decision_maker_title"] = dm.get("title", "")
+                    lead_data["decision_maker_linkedin"] = dm.get("linkedin_url", "")
+                    all_emails = list(dict.fromkeys(
+                        lead_data.get("contact_emails", []) + dm.get("email_guesses", [])
+                    ))
+                    lead_data["contact_emails"] = all_emails
+                    lead_data["email_guesses"] = dm.get("email_guesses", [])
 
                 # Tech stack detection
                 lead_data["tech_stack"] = detect_tech_stack(url, lead_data.get("company_name", ""))
