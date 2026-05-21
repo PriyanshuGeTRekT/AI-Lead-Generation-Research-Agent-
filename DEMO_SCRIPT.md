@@ -1,5 +1,5 @@
 # Demo Video Script: AI Lead Generation & Research Assistant
-**Total runtime: ~8 minutes | Razor Infotech Take-Home Assignment**
+**Total runtime: ~10 minutes | Razor Infotech Take-Home Assignment**
 
 ---
 
@@ -32,13 +32,28 @@
 
 **Point to the 3 agents:**
 > "Three specialized agents:
-> - **Research Agent**: searches the web using DuckDuckGo, scrapes company websites,
->   and extracts structured lead data via Llama 3.1
-> - **Qualification Agent**: scores each lead 0-10 using RAG-grounded criteria. It retrieves
->   real HumanMaximizer product info from ChromaDB before scoring, so the LLM can't hallucinate
->   features we don't have
+> - **Research Agent**: this one is doing something smarter than a single DuckDuckGo search.
+>   It fans out to three sources simultaneously: DuckDuckGo for general web coverage,
+>   Naukri.com for companies posting HR Manager or Payroll job listings, and Indeed.in
+>   for the same signal. The insight here is that a company actively hiring HR staff is
+>   in an active HR spending cycle. They have headcount pressure, which means they have
+>   a payroll and compliance problem, which makes them a direct prospect for HRMS software.
+>   Results are deduplicated by domain so the same company never hits the pipeline twice
+>   from two different sources.
+> - **Qualification Agent**: scores each lead 0-10 using RAG-grounded criteria with structured
+>   Pydantic output. The LLM response is schema-validated at the API call level via
+>   LangChain's `.with_structured_output()`, so there are no JSON parsing failures in
+>   production. It retrieves real HumanMaximizer product info from ChromaDB before scoring,
+>   so the LLM cannot hallucinate features we do not have.
 > - **Sales Agent**: writes a personalized outreach email per lead, also grounded in RAG
->   context, with a 3-layer hallucination guard"
+>   context, with a 3-layer hallucination guard. If a Slack webhook is configured, the
+>   lead goes to a human review step before it ever touches a prospect's inbox."
+
+**Say:**
+> "In production, the `/generate-leads` endpoint dispatches the pipeline to a Celery worker
+> over Redis and returns a run ID instantly. The caller polls `/pipeline-status/{run_id}`
+> for completion. Without a worker running, it falls back silently to synchronous execution.
+> The API contract is identical either way, so the demo dashboard works the same."
 
 **Show:** Slide 4 (RAG Pipeline)
 
@@ -46,7 +61,8 @@
 > "The RAG pipeline scraped humanmaximizer.com, chunked it into 500-token segments with
 > 50-token overlap, embedded it using all-MiniLM-L6-v2 (a lightweight but effective model),
 > and stored it in ChromaDB with cosine similarity search. Each agent queries this before
-> generating any product claims."
+> generating any product claims. At scale, you swap ChromaDB for pgvector on PostgreSQL
+> with one environment variable."
 
 ---
 
@@ -128,12 +144,13 @@ curl http://localhost:8000/health
 > the Research Agent step light up first, then Qualification, then Sales.
 >
 > What's happening under the hood:
-> 1. Research Agent searches DuckDuckGo for Indian manufacturing companies
-> 2. For each result, it scrapes the website and calls Llama 3.1 to extract structured data
-> 3. Redis deduplication makes sure we don't process the same company twice
-> 4. Each extracted lead flows to the Qualification Agent, which retrieves HumanMaximizer
->    product context from ChromaDB and scores the lead
-> 5. Leads scoring 5.0 or above go to the Sales Agent for outreach generation"
+> 1. Research Agent fans out to DuckDuckGo, Naukri.com, and Indeed.in for Indian manufacturing companies
+> 2. Results are deduplicated by domain, so a company appearing on both Naukri and DuckDuckGo is only processed once
+> 3. For each unique company, the agent scrapes the website and calls Llama 3.1 to extract structured data
+> 4. Redis deduplication makes sure we do not process the same company twice across pipeline runs
+> 5. Each extracted lead flows to the Qualification Agent, which retrieves HumanMaximizer
+>    product context from ChromaDB and scores the lead using structured Pydantic output
+> 6. Leads scoring 5.0 or above go to the Sales Agent for outreach generation"
 
 **When the overlay closes, point to the dashboard and say:**
 > "Five unique leads, all five qualified with a score of 8.5 out of 10. Zero disqualified.
@@ -154,7 +171,47 @@ curl http://localhost:8000/health
 
 ---
 
-## [6:30 - 7:15] Observability & Monitoring
+## [6:30 - 7:15] Human-in-the-Loop Review
+
+**Show:** Terminal and Slack, side by side if possible
+
+**Say:**
+> "Now let me show the human review step. This is off by default. To enable it, set
+> `SLACK_WEBHOOK_URL` in `.env`. With that set, leads after email generation land
+> at `pending_review` instead of `outreach_ready`."
+
+```bash
+curl http://localhost:8000/leads/pending-review
+```
+
+**Say:**
+> "These leads are waiting for a human to approve or reject them before anything
+> is sent to a prospect.
+>
+> When a lead hits `pending_review`, the system sends a Slack Block Kit message.
+> It has five blocks: a header with the company name and pipeline run ID, a details
+> block showing the qualification score, industry, and location, a pain points block
+> listing what the Research Agent extracted, an email preview block with the first
+> 250 characters of the generated outreach, and two action buttons: Approve and Reject.
+>
+> Approve links to `POST /leads/{id}/approve`. Reject links to `POST /leads/{id}/reject`."
+
+**Show:** Approve a lead via curl
+
+```bash
+curl -X POST http://localhost:8000/leads/{id}/approve
+```
+
+**Say:**
+> "Approved. That lead is now `outreach_ready`. A rejected lead moves to `disqualified`
+> and will not be processed again within the 24-hour deduplication window.
+>
+> Without `SLACK_WEBHOOK_URL` set, the Sales Agent writes `outreach_ready` directly
+> and no Slack call is made. Behavior is identical to v1. Zero-config default."
+
+---
+
+## [7:15 - 8:00] Observability & Monitoring
 
 **Show:**
 
@@ -185,7 +242,7 @@ curl http://localhost:8000/metrics
 
 ---
 
-## [7:15 - 8:00] Closing: Architectural Decisions & Trade-offs
+## [8:00 - 9:00] Closing: Architectural Decisions & Trade-offs
 
 **Show:** Slide 9 (Architectural Decisions) or just speak
 
@@ -196,6 +253,21 @@ curl http://localhost:8000/metrics
 > compute generating emails for leads that score 2 out of 10. The Supervisor routes
 > directly to END for low-quality leads.
 >
+> **Why multi-source search?** DuckDuckGo alone finds companies by keyword. Naukri and
+> Indeed find companies by behavior: actively hiring HR staff means an active HR budget.
+> That is a stronger buying signal than company size or industry alone.
+>
+> **Why Celery over synchronous execution?** The synchronous path blocks for 20-30 seconds
+> per pipeline run. Under concurrent load that saturates the FastAPI worker pool. Celery
+> dispatches each run as a background task, returns a run ID instantly, and lets the caller
+> poll for completion. The sync fallback means the API still works without a worker running,
+> so development and demos are unaffected.
+>
+> **Why pgvector at scale?** ChromaDB is great for a single instance. When lead volume
+> grows or your data already lives in PostgreSQL, pgvector gives you cosine similarity
+> search inside the same database, with ACID transactions and SQL tooling. You activate
+> it with one environment variable and nothing else changes.
+>
 > **Why Groq for inference?** The assignment needs an open-source model. Llama 3.1 is
 > Meta's open-source LLM. Groq is just the inference engine that runs it 10x faster than
 > a local setup, which helps hit the deadline. The Ollama swap-out is documented in the
@@ -204,9 +276,10 @@ curl http://localhost:8000/metrics
 > **Why Redis over in-memory for rate limiting?** Atomic INCR operations mean no race
 > conditions under multiple API replicas. In-memory counters break horizontally.
 >
-> **What I'd do differently at production scale?** Add a proper message queue like
-> Celery + SQS for async pipeline execution, replace the JSONL metrics file with Prometheus,
-> and add a human-in-the-loop review step before outreach emails are sent."
+> **What I'd build next?** Once 200+ leads have been approved or rejected through the
+> Slack review flow, that dataset is enough to run QLoRA fine-tuning on Llama 3 8B
+> with Unsloth. The qualification scores would be grounded in your actual customer
+> profile instead of general LLM reasoning."
 
 **Final shot:** Show the architecture deck slide 10 (Tech Stack Requirements Checklist)
 
@@ -219,8 +292,12 @@ curl http://localhost:8000/metrics
 | Endpoint | Purpose |
 |----------|---------|
 | `POST /ingest-knowledge` | Build RAG from humanmaximizer.com |
-| `POST /generate-leads` | Run full multi-agent pipeline |
+| `POST /generate-leads` | Run full multi-agent pipeline (async if Celery worker running, sync fallback) |
+| `GET /pipeline-status/{run_id}` | Poll Celery task: PENDING / STARTED / SUCCESS / FAILURE |
 | `GET /leads?status=outreach_ready` | Retrieve qualified leads |
+| `GET /leads/pending-review` | List leads waiting for human approval |
+| `POST /leads/{id}/approve` | Approve a lead, moves to `outreach_ready` |
+| `POST /leads/{id}/reject` | Reject a lead, moves to `disqualified` |
 | `GET /metrics` | Pipeline observability summary |
 | `GET /health` | Dependency health check |
 | `GET /docs` | Swagger UI |
@@ -230,8 +307,12 @@ curl http://localhost:8000/metrics
 | LLM | Llama 3.1 8B via Groq API |
 | LLM Client | langchain-groq (ChatGroq) |
 | Orchestration | LangGraph StateGraph |
-| RAG Vector Store | ChromaDB |
+| Lead Discovery | DuckDuckGo + Naukri.com + Indeed.in |
+| Structured Output | LangChain `.with_structured_output()` + Pydantic |
+| RAG Vector Store | ChromaDB (default) / pgvector on PostgreSQL (USE_PGVECTOR=true) |
 | Embeddings | all-MiniLM-L6-v2 (HuggingFace) |
+| Async Queue | Celery + Redis DB 1 |
+| Human Review | Slack Incoming Webhooks |
 | Caching / Rate Limiting | Redis 7 Alpine |
 | API Framework | FastAPI |
 | Logging | Loguru (structured JSON) |
