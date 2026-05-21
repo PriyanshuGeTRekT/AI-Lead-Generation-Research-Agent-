@@ -259,102 +259,96 @@ function dashedLine(slide, x, y, w, h) {
   const s = lightSlide();
   addLightTitle(s, "System Architecture");
 
-  // Source boxes row
-  const sources = ["DuckDuckGo", "Naukri.com", "Indeed.in"];
-  const srcX = [0.7, 3.4, 6.1];
+  // ── Source boxes (left half, above Research Agent) ──
+  // Three compact boxes whose centers all fall within Research Agent width
+  const srcLabels = ["DuckDuckGo", "Naukri.com", "Indeed.in"];
+  const srcX = [0.4, 1.78, 3.16];
+  const srcW = 1.2;
+  const srcCY = 1.05; // top-left y of source boxes
+  const srcH = 0.38;
   for (let i = 0; i < 3; i++) {
-    flowBox(s, sources[i], srcX[i], 1.1, 2.1, 0.42, C.teal, C.white, 11);
+    flowBox(s, srcLabels[i], srcX[i], srcCY, srcW, srcH, C.teal, C.white, 10);
+    // Arrow down from each source center to Research Agent top
+    arrowDown(s, srcX[i] + srcW / 2, srcCY + srcH, 0.22);
   }
 
-  // Arrows from sources down to Research Agent
-  arrowDown(s, 1.75, 1.52, 0.38);
-  arrowDown(s, 4.45, 1.52, 0.38);
-  arrowDown(s, 7.15, 1.52, 0.38);
-
-  // Converge label
+  // Lead Discovery label between sources and Research Agent
   s.addText("Lead Discovery", {
-    x: 3.0, y: 1.55, w: 3.5, h: 0.3,
-    fontSize: 9,
-    color: C.mutedDark,
-    align: "center",
-    fontFace: "Calibri",
-    italic: true,
+    x: 0.4, y: 1.09, w: 4.0, h: 0.22,
+    fontSize: 8, color: C.mutedDark, fontFace: "Calibri", italic: true, align: "center",
   });
 
-  // Research Agent
-  flowBox(s, "Research Agent", 3.2, 1.9, 3.1, 0.5, C.navy, C.white, 13);
+  // ── Research Agent (spans all three source centers) ──
+  const raX = 0.4, raY = 1.65, raW = 4.0, raH = 0.42;
+  flowBox(s, "Research Agent", raX, raY, raW, raH, C.navy, C.white, 13);
 
-  // Arrow right to Qualification
-  arrowRight(s, 6.3, 2.15, 0.4);
+  // Arrow right: Research → Qualification
+  arrowRight(s, raX + raW, raY + raH / 2, 0.55);
 
-  // Qualification Agent
-  flowBox(s, "Qualification Agent", 6.7, 1.9, 3.0, 0.5, C.navy, C.white, 12);
+  // ── Qualification Agent (right half) ──
+  const qaX = 4.95, qaY = raY, qaW = 4.65, qaH = raH;
+  flowBox(s, "Qualification Agent", qaX, qaY, qaW, qaH, C.navy, C.white, 12);
 
-  // Arrow down from Qualification: score >= 5 and score < 5
-  arrowDown(s, 8.2, 2.4, 0.5);
-
-  // Score branch label
+  // ── Branch from Qualification ──
+  // score >= 5: arrow straight down on right side of Qual
+  const salX = 6.8, salY = 3.05, salW = 2.8, salH = 0.42;
+  arrowDown(s, qaX + qaW * 0.7, qaY + qaH, 0.58);
   s.addText("score >= 5", {
-    x: 7.5, y: 2.42, w: 1.5, h: 0.25,
+    x: qaX + qaW * 0.55, y: qaY + qaH + 0.08, w: 1.5, h: 0.22,
     fontSize: 9, color: C.mint, fontFace: "Calibri", bold: true,
   });
 
-  // Sales Agent
-  flowBox(s, "Sales Agent", 7.5, 2.9, 2.0, 0.48, C.navy, C.white, 12);
-
-  // Arrow right from Sales Agent to Human Review
-  arrowRight(s, 9.5, 3.14, 0.25);
-
-  // Human Review box
-  flowBox(s, "Human Review\n(Slack)", 9.0, 2.9, 0.9, 0.48, C.amber, C.nearBlack, 9);
-
-  // Approve/Reject from Human Review
-  arrowDown(s, 9.45, 3.38, 0.4);
-
-  s.addText("Approve", {
-    x: 8.6, y: 3.4, w: 1.0, h: 0.2,
-    fontSize: 8, color: C.mint, fontFace: "Calibri", bold: true,
-  });
-
-  // Outreach Ready
-  flowBox(s, "Outreach Ready", 8.6, 3.78, 1.7, 0.4, C.mint, C.nearBlack, 10);
-
-  // Discard branch (score < 5)
-  arrowDown(s, 8.2, 2.4, 0.5);
-
-  // score < 5 label
+  // score < 5: arrow down on left side of Qual then Discard
+  arrowDown(s, qaX + qaW * 0.25, qaY + qaH, 0.58);
   s.addText("score < 5", {
-    x: 6.2, y: 2.55, w: 1.4, h: 0.25,
+    x: qaX, y: qaY + qaH + 0.08, w: 1.5, h: 0.22,
     fontSize: 9, color: C.red, fontFace: "Calibri", bold: true,
   });
+  flowBox(s, "Discard", qaX, salY, 2.0, salH, C.greyFill, C.mutedDark, 11);
 
-  // Discard box
-  flowBox(s, "Discard", 5.8, 2.9, 1.5, 0.4, C.greyFill, C.mutedDark, 11);
+  // ── Sales Agent ──
+  flowBox(s, "Sales Agent", salX, salY, salW, salH, C.navy, C.white, 12);
 
-  // Left side async label
-  s.addText("Sync or Celery Async", {
-    x: 0.1, y: 2.5, w: 1.2, h: 1.5,
-    fontSize: 9,
-    color: C.mutedDark,
-    fontFace: "Calibri",
-    italic: true,
-    rotate: 270,
+  // Arrow down: Sales → Human Review
+  arrowDown(s, salX + salW / 2, salY + salH, 0.3);
+
+  // ── Human Review (amber, directly below Sales) ──
+  const hrX = salX, hrY = salY + salH + 0.3, hrW = salW, hrH = 0.42;
+  flowBox(s, "Human Review (Slack)", hrX, hrY, hrW, hrH, C.amber, C.nearBlack, 11);
+
+  // Approve: arrow down → Outreach Ready
+  arrowDown(s, hrX + hrW / 2, hrY + hrH, 0.28);
+  s.addText("Approve", {
+    x: hrX + hrW / 2 + 0.08, y: hrY + hrH + 0.04, w: 0.9, h: 0.2,
+    fontSize: 8, color: C.mint, fontFace: "Calibri", bold: true,
+  });
+  flowBox(s, "Outreach Ready", hrX, hrY + hrH + 0.28, hrW, 0.38, C.mint, C.nearBlack, 11);
+
+  // ── ChromaDB / pgvector (left lower section) ──
+  const dbX = 0.4, dbY = 3.05, dbW = 4.0, dbH = 0.42;
+  flowBox(s, "ChromaDB / pgvector", dbX, dbY, dbW, dbH, C.tealLight, C.white, 11);
+
+  // Dashed RAG lines: horizontal from DB right edge to Qual and Sales left edges
+  // DB right edge: dbX + dbW = 4.4
+  // Qual left edge: qaX = 4.95  → gap = 0.55 (connect with horizontal line at Qual center y)
+  dashedLine(s, dbX + dbW, qaY + qaH / 2, 0.55, 0); // horizontal to Qual
+  s.addText("RAG", {
+    x: 4.4, y: qaY + qaH / 2 - 0.2, w: 0.55, h: 0.2,
+    fontSize: 8, color: C.teal, fontFace: "Calibri", bold: true, align: "center",
   });
 
-  // ChromaDB box at bottom
-  flowBox(s, "ChromaDB / pgvector", 3.2, 4.6, 3.1, 0.4, C.tealLight, C.white, 10);
-
-  // Dashed RAG lines to Qualification and Sales
-  dashedLine(s, 4.75, 4.6, 0, -1.7);
-  dashedLine(s, 6.8, 4.6, 0, -1.22);
-
+  // DB right edge to Sales left edge: Sales at salX=6.8, DB right=4.4
+  // Draw at Sales mid-y, from DB right edge across
+  dashedLine(s, dbX + dbW, salY + salH / 2, salX - (dbX + dbW), 0); // horizontal to Sales
   s.addText("RAG", {
-    x: 4.45, y: 3.5, w: 0.6, h: 0.25,
+    x: dbX + dbW + 0.05, y: salY + salH / 2 - 0.2, w: 0.6, h: 0.2,
     fontSize: 8, color: C.teal, fontFace: "Calibri", bold: true,
   });
-  s.addText("RAG", {
-    x: 6.5, y: 3.8, w: 0.6, h: 0.25,
-    fontSize: 8, color: C.teal, fontFace: "Calibri", bold: true,
+
+  // Left side async label (rotated)
+  s.addText("Celery Async", {
+    x: 0.08, y: 2.35, w: 0.9, h: 1.3,
+    fontSize: 8, color: C.mutedDark, fontFace: "Calibri", italic: true, rotate: 270,
   });
 }
 
@@ -725,7 +719,7 @@ function dashedLine(slide, x, y, w, h) {
 
   // Yes branch
   arrowRight(s, 3.95, 1.875, 0.25);
-  s.addText("Yes", { x: 3.95, y: 1.62, w: 0.3, h: 0.2, fontSize: 9, color: C.mint, fontFace: "Calibri", bold: true });
+  s.addText("Yes", { x: 3.75, y: 1.3, w: 0.4, h: 0.22, fontSize: 9, color: C.mint, fontFace: "Calibri", bold: true });
 
   flowBox(s, "Status:\npending_review", 4.2, 1.55, 1.55, 0.65, C.tealLight, C.white, 10);
   arrowRight(s, 5.75, 1.875, 0.25);
