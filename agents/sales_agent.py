@@ -7,8 +7,10 @@ Uses RAG to ensure product claims are grounded in real HumanMaximizer content.
 Extends BaseAgent for retry, caching, structured logging, hallucination guard.
 """
 import json
+import os
 from graph.state import LeadState
 from agents.base import BaseAgent
+from notifications.slack import send_lead_review_request
 from rag.retriever import retrieve_hrms_context
 from rag.hallucination_guard import guard_llm_response
 from observability.langsmith_tracer import stage_timer, log_hallucination_event
@@ -102,8 +104,17 @@ class SalesAgent(BaseAgent):
                     "follow_up_note": result.get("follow_up_note", ""),
                     "hallucination_confidence": guard["confidence"],
                 }
-                lead["status"] = "outreach_ready"
-                self.log.info(f"Outreach ready for: {company_name}")
+
+                # Human-in-the-loop: if Slack is configured, hold for review
+                if os.getenv("SLACK_WEBHOOK_URL"):
+                    # Set to pending_review instead of outreach_ready
+                    lead["status"] = "pending_review"
+                    send_lead_review_request(lead)
+                    self.log.info(f"Lead sent to Slack for review: {lead.get('company_name')}")
+                else:
+                    # No Slack configured: go directly to outreach_ready (default behavior preserved)
+                    lead["status"] = "outreach_ready"
+                    self.log.info(f"Outreach ready for: {company_name}")
 
             except Exception as e:
                 self.log.error(f"Error generating outreach for {company_name}: {e}")

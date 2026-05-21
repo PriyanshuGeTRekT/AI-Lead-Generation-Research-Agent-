@@ -1,0 +1,155 @@
+"""
+Slack Human-in-the-Loop Notifications
+---------------------------------------
+Sends lead review requests to a Slack channel via Incoming Webhooks.
+A reviewer reads the lead summary and email draft, then clicks Approve or Reject,
+which calls back to the API to update the lead status.
+
+Setup:
+  1. Go to https://api.slack.com/apps
+  2. Create a new app, enable Incoming Webhooks
+  3. Add a webhook to your workspace, copy the URL
+  4. Set SLACK_WEBHOOK_URL in .env
+
+No-op mode: if SLACK_WEBHOOK_URL is not set, the notification is logged locally
+and the function returns True. This means the system works out of the box
+without Slack configured.
+"""
+import os
+import json
+import requests
+from loguru import logger
+
+
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
+
+
+def send_lead_review_request(lead: dict) -> bool:
+    """
+    Post a lead approval request to Slack.
+
+    Returns True on success or no-op mode, False on send failure.
+    Never raises. Always logs the outcome.
+
+    Args:
+        lead: Lead dict with fields: id, company_name, qualification_score,
+              pain_points, outreach_email, status
+    """
+    company_name = lead.get("company_name", "Unknown")
+    lead_id = lead.get("id", "unknown")
+    score = lead.get("qualification_score", "N/A")
+    industry = lead.get("industry", "N/A")
+    location = lead.get("location", "N/A")
+    pain_points = lead.get("pain_points") or []
+    outreach_draft = lead.get("outreach_draft") or {}
+
+    # Build email preview from the draft dict or a plain string
+    if isinstance(outreach_draft, dict):
+        email_body = outreach_draft.get("email_body", "")
+        subject = outreach_draft.get("subject", "")
+        email_preview_text = f"Subject: {subject}\n\n{email_body}"
+    else:
+        email_preview_text = str(outreach_draft)
+
+    email_preview = (email_preview_text[:250] + "...") if len(email_preview_text) > 250 else email_preview_text
+
+    # First 3 pain points as a bullet list
+    top_pain_points = pain_points[:3]
+    pain_points_text = "\n".join(f"- {p}" for p in top_pain_points) if top_pain_points else "- None identified"
+
+    approve_url = f"{BASE_URL}/leads/{lead_id}/approve"
+    reject_url = f"{BASE_URL}/leads/{lead_id}/reject"
+
+    if not SLACK_WEBHOOK_URL:
+        logger.info(
+            f"[Slack no-op] Lead review request for '{company_name}' | "
+            f"id={lead_id} score={score} industry={industry} location={location} | "
+            f"pain_points={top_pain_points} | "
+            f"email_preview={email_preview!r} | "
+            f"approve={approve_url} reject={reject_url}"
+        )
+        return True
+
+    blocks = [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"New Lead Ready for Review: {company_name}",
+                "emoji": False,
+            },
+        },
+        {
+            "type": "section",
+            "fields": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Score:* {score}/10",
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Industry:* {industry}",
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Location:* {location}",
+                },
+            ],
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Pain Points:*\n{pain_points_text}",
+            },
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Email Preview:*\n```{email_preview}```",
+            },
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Approve",
+                        "emoji": False,
+                    },
+                    "style": "primary",
+                    "url": approve_url,
+                },
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Reject",
+                        "emoji": False,
+                    },
+                    "style": "danger",
+                    "url": reject_url,
+                },
+            ],
+        },
+    ]
+
+    payload = {"blocks": blocks}
+
+    try:
+        response = requests.post(
+            SLACK_WEBHOOK_URL,
+            data=json.dumps(payload),
+            headers={"Content-Type": "application/json"},
+            timeout=5,
+        )
+        response.raise_for_status()
+        logger.info(f"Slack review request sent for lead: {company_name}")
+        return True
+    except Exception as e:
+        logger.warning(f"Slack notification failed for {lead.get('company_name')}: {e}")
+        return False
