@@ -4,55 +4,110 @@ import json
 import requests
 from typing import List, Dict
 from urllib.parse import urlparse
-from duckduckgo_search import DDGS
 from loguru import logger
 from tools.naukri_scraper import search_naukri_companies
 from tools.indeed_scraper import search_indeed_companies
 
+SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
+
 
 def search_companies(keyword: str, max_results: int = 10) -> List[Dict]:
     """
-    Search for companies related to a keyword using DuckDuckGo.
-    Returns a list of raw search results.
-
-    Retry strategy: up to 3 attempts with exponential backoff to handle
-    DuckDuckGo's 202 rate-limit responses. Sleep 2s between retries.
+    Search for companies using Serper.dev (Google results via API).
+    Falls back to curated dataset if API key missing or request fails.
     """
-    results = []
-    query = f"{keyword} company software India B2B"
+    if SERPER_API_KEY:
+        results = _search_serper(keyword, max_results)
+        if results:
+            return results
+        logger.warning("[WebSearch] Serper returned no results, using fallback")
+    else:
+        logger.warning("[WebSearch] No SERPER_API_KEY set, using fallback dataset")
 
-    for attempt in range(3):
-        try:
-            with DDGS() as ddgs:
-                for r in ddgs.text(
-                    query,
-                    max_results=max_results,
-                    safesearch="off",
-                ):
-                    results.append({
-                        "title": r.get("title", ""),
-                        "url": r.get("href", ""),
-                        "snippet": r.get("body", ""),
-                    })
-            if results:
-                break  # Success
-        except Exception as e:
-            err_str = str(e)
-            if "202" in err_str or "Ratelimit" in err_str or "ratelimit" in err_str:
-                wait = 2 ** attempt  # 1s, 2s, 4s
-                logger.warning(f"[WebSearch] Rate limited (attempt {attempt+1}/3), retrying in {wait}s")
-                time.sleep(wait)
-            else:
-                logger.error(f"[WebSearch] Error: {e}")
+    return _get_fallback_companies(keyword)
+
+
+
+# Domains to exclude — aggregators, lists, PDFs, social media, job boards
+_BLOCKED_DOMAINS = {
+    "wikipedia.org", "linkedin.com", "facebook.com", "twitter.com",
+    "instagram.com", "youtube.com", "indiamart.com", "justdial.com",
+    "companiesmarketcap.com", "dnb.co.in", "dnb.com", "ambitionbox.com",
+    "glassdoor.com", "indeed.com", "naukri.com", "moneycontrol.com",
+    "economictimes.com", "livemint.com", "businessstandard.com",
+    "easyleadz.com", "crunchbase.com", "zaubacorp.com", "tofler.in",
+}
+
+
+def _is_company_url(url: str) -> bool:
+    """Return True if the URL looks like an actual company website (not an aggregator)."""
+    if not url:
+        return False
+    # Skip PDFs and known aggregator domains
+    if url.lower().endswith(".pdf"):
+        return False
+    try:
+        domain = urlparse(url).netloc.replace("www.", "").lower()
+        # Check against block list (exact or subdomain match)
+        for blocked in _BLOCKED_DOMAINS:
+            if domain == blocked or domain.endswith("." + blocked):
+                return False
+    except Exception:
+        pass
+    return True
+
+
+def _search_serper(keyword: str, max_results: int = 10) -> List[Dict]:
+    """
+    Query Serper.dev Google Search API.
+    Returns results in the same format as the old DuckDuckGo function.
+    Free tier: 2,500 queries. No credit card required.
+    """
+    # Build a targeted query — ask for the company's own site, not lists
+    # Strip trailing "company India" if already present in keyword to avoid redundancy
+    kw_clean = keyword.strip()
+    if "india" not in kw_clean.lower():
+        kw_clean = f"{kw_clean} India"
+    query = f"{kw_clean} official website"
+    try:
+        response = requests.post(
+            "https://google.serper.dev/search",
+            headers={
+                "X-API-KEY": SERPER_API_KEY,
+                "Content-Type": "application/json",
+            },
+            json={
+                "q": query,
+                "num": max_results + 5,  # fetch extra to compensate for filtered-out results
+                "gl": "in",   # India
+                "hl": "en",
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        results = []
+        for r in data.get("organic", []):
+            url = r.get("link", "")
+            if not _is_company_url(url):
+                logger.debug(f"[Serper] Skipping aggregator/list URL: {url}")
+                continue
+            results.append({
+                "title": r.get("title", ""),
+                "url": url,
+                "snippet": r.get("snippet", ""),
+                "source": "serper",
+            })
+            if len(results) >= max_results:
                 break
 
-    # Fallback: curated real Indian companies that are HRMS prospects
-    # Used when DuckDuckGo is rate-limited (common in cloud/Docker environments)
-    if not results:
-        logger.warning("[WebSearch] Using curated fallback dataset (DuckDuckGo unavailable)")
-        results = _get_fallback_companies(keyword)
+        logger.info(f"[Serper] Got {len(results)} company results for: {query}")
+        return results
 
-    return results
+    except Exception as e:
+        logger.error(f"[Serper] Search failed: {e}")
+        return []
 
 
 def _get_fallback_companies(keyword: str) -> List[Dict]:
@@ -154,6 +209,51 @@ def _get_fallback_companies(keyword: str) -> List[Dict]:
                 "Ola is India's largest ride-sharing company based in Bengaluru. 5,000+ corporate employees "
                 "and 1.5 million driver-partners. HR challenges include onboarding at scale, "
                 "benefits administration, and compliance for gig economy workforce."
+            ),
+        },
+        {
+            "title": "Tata Steel - Manufacturing and Steel Production India",
+            "url": "https://www.tatasteel.com",
+            "snippet": (
+                "Tata Steel is one of India's largest steel manufacturers with 35,000+ employees. "
+                "Jamshedpur, Jharkhand. Managing blue-collar and white-collar workforce across "
+                "multiple plants. Shift scheduling, attendance, and statutory compliance are key HR needs."
+            ),
+        },
+        {
+            "title": "HCL Technologies - IT Services India",
+            "url": "https://www.hcltech.com",
+            "snippet": (
+                "HCL Technologies is a global IT company based in Noida with 220,000+ employees. "
+                "Rapid scaling across geographies. Complex payroll, multi-country compliance, "
+                "and performance management across delivery centres are core HR challenges."
+            ),
+        },
+        {
+            "title": "Nykaa - Beauty and Fashion E-commerce India",
+            "url": "https://www.nykaa.com",
+            "snippet": (
+                "Nykaa is India's leading beauty e-commerce company. Headquartered in Mumbai with "
+                "12,000+ employees across retail, tech, and logistics. Fast-growing team requires "
+                "automated onboarding, appraisal cycles, and leave management."
+            ),
+        },
+        {
+            "title": "Delhivery - Logistics and Supply Chain India",
+            "url": "https://www.delhivery.com",
+            "snippet": (
+                "Delhivery is India's largest fully-integrated logistics company based in Gurugram. "
+                "100,000+ delivery and warehouse staff. HR needs include mass onboarding, "
+                "attendance tracking, and performance management for distributed workforce."
+            ),
+        },
+        {
+            "title": "Zepto - Quick Commerce Startup India",
+            "url": "https://www.zeptonow.com",
+            "snippet": (
+                "Zepto is India's fastest-growing quick commerce company headquartered in Mumbai. "
+                "10,000+ employees and delivery staff. Rapid hiring cycles, gig workforce management, "
+                "and compliance for dark store operations are critical HR requirements."
             ),
         },
     ]

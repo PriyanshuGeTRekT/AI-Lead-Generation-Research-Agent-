@@ -347,6 +347,12 @@ def get_pending_review_leads():
     return {"total": len(pending), "leads": pending}
 
 
+@app.get("/leads/{lead_id}/approve")
+def approve_lead_get(lead_id: str):
+    """GET version for Slack button links — same logic as POST."""
+    return approve_lead(lead_id)
+
+
 @app.post("/leads/{lead_id}/approve")
 def approve_lead(lead_id: str):
     """
@@ -366,6 +372,12 @@ def approve_lead(lead_id: str):
     lead["status"] = "outreach_ready"
     _save_leads(leads)
     return {"message": f"Lead {lead_id} approved", "lead": lead}
+
+
+@app.get("/leads/{lead_id}/reject")
+def reject_lead_get(lead_id: str):
+    """GET version for Slack button links — same logic as POST."""
+    return reject_lead(lead_id)
 
 
 @app.post("/leads/{lead_id}/reject")

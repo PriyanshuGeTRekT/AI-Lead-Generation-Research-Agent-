@@ -44,10 +44,10 @@ Score this lead from 0-10 based on:
 
 Respond with JSON ONLY:
 {{
-  "qualification_score": <float 0-10>,
-  "qualification_reason": "...(2-3 sentences explaining the score)",
-  "pain_points_identified": ["...", "..."],
-  "recommended_approach": "...(how to approach this lead)"
+  "score": <float 0-10>,
+  "reasoning": "...(2-3 sentences explaining the score)",
+  "key_signals": ["...", "...", "..."],
+  "recommended_action": "...(how to approach this lead)"
 }}
 """
 

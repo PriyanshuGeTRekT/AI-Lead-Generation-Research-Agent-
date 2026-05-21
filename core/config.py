@@ -45,9 +45,9 @@ class Settings(BaseSettings):
     redis_pipeline_ttl: int = 86400      # 24 hour TTL for pipeline state
 
     # ── Pipeline ──────────────────────────────────────────────────────────────
-    max_leads_per_run: int = 5
+    max_leads_per_run: int = 10
     max_iterations: int = 10
-    web_search_results: int = 8
+    web_search_results: int = 10
     request_timeout: int = 10            # seconds for web scraping
 
     # ── Observability ─────────────────────────────────────────────────────────
@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 10      # max /generate-leads calls per minute
     max_keyword_length: int = 200        # prevent prompt injection via long inputs
     data_path: str = "./data/leads.json"
+
+    # ── Web Search ────────────────────────────────────────────────────────────
+    serper_api_key: str = ""             # Serper.dev Google Search API key (optional)
 
     # ── Human-in-the-Loop (Slack) ─────────────────────────────────────────────
     slack_webhook_url: str = ""          # Slack Incoming Webhook URL (optional)
@@ -76,6 +79,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"          # unknown env vars are silently skipped
 
 
 @lru_cache()

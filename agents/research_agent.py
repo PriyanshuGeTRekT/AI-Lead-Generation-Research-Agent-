@@ -11,6 +11,7 @@ Extends BaseAgent for:
   - Consistent JSON parsing
 """
 import json
+import uuid
 from graph.state import LeadState
 from agents.base import BaseAgent
 from tools.web_search import search_companies_multi_source, scrape_company_info
@@ -122,6 +123,7 @@ class ResearchAgent(BaseAgent):
                 # Mark as seen in Redis (dedup)
                 mark_lead_seen(company_name)
 
+                lead_data.setdefault("id", str(uuid.uuid4())[:8])
                 lead_data.setdefault("qualification_score", None)
                 lead_data.setdefault("qualification_reason", None)
                 lead_data.setdefault("outreach_draft", None)
