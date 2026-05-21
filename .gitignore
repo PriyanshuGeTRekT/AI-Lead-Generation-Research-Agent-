@@ -19,9 +19,11 @@ dist/
 build/
 .eggs/
 
-# Node
+# Node (pptxgenjs was used for architecture slides, no longer needed)
 node_modules/
 npm-debug.log*
+package.json
+package-lock.json
 
 # Docker
 .docker/
