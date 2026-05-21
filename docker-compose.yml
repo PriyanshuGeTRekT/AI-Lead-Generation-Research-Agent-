@@ -51,5 +51,36 @@ services:
       timeout: 5s
       retries: 3
 
+  celery_worker:
+    build: .
+    command: celery -A worker worker --loglevel=info --concurrency=2
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+    profiles:
+      - full
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: leadgen
+      POSTGRES_PASSWORD: leadgen
+      POSTGRES_DB: leadgen
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leadgen"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - full
+
 volumes:
   redis_data:
+  pgvector_data:
