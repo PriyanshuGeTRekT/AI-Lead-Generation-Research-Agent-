@@ -18,6 +18,16 @@ class Lead(TypedDict):
     pain_points: Optional[List[str]]
     status: str  # researched | qualified | disqualified | outreach_ready | pending_review
 
+    # ── LinkedIn Enrichment fields ────────────────────────────────────────────
+    decision_maker_name: Optional[str]       # First name of HR/People DM
+    decision_maker_full_name: Optional[str]  # Full name
+    decision_maker_title: Optional[str]      # Job title
+    decision_maker_linkedin: Optional[str]   # LinkedIn profile URL
+    email_guesses: Optional[List[str]]       # Inferred email patterns from name+domain
+
+    # ── Tech Stack Detection fields ───────────────────────────────────────────
+    tech_stack: Optional[dict]               # {current_tools, maturity, signals, pitch_angle}
+
     # ── Qualification Agent fields ────────────────────────────────────────────
     qualification_score: Optional[float]     # 0.0-10.0
     qualification_reason: Optional[str]      # 2-3 sentence score explanation
@@ -27,6 +37,8 @@ class Lead(TypedDict):
 
     # ── Sales Agent fields ────────────────────────────────────────────────────
     outreach_draft: Optional[dict]           # {subject, email_body, follow_up_note, hallucination_confidence}
+    follow_up_sequence: Optional[List[dict]] # [{day, subject, email_body}, ...] — 3 follow-ups
+    verified_emails: Optional[List[dict]]    # [{email, valid, quality}, ...] from email verifier
 
 
 class LeadState(TypedDict):

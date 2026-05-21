@@ -801,18 +801,63 @@ function buildCard(lead, idx) {
   const qualReason = lead.qualification_reason && !lead.summary
     ? `<div class="qual-reason">${escHtml(lead.qualification_reason)}</div>` : '';
 
+  // Tech stack badge
+  const techStack = lead.tech_stack || {};
+  const currentTools = techStack.current_tools || [];
+  const maturityColors = { legacy: 'var(--amber)', modern: 'var(--blue)', manual: 'var(--red)', unknown: 'var(--muted)' };
+  const techBadge = techStack.maturity && techStack.maturity !== 'unknown'
+    ? `<span style="font-size:.65rem;padding:2px 7px;border-radius:4px;border:1px solid var(--border);color:${maturityColors[techStack.maturity]||'var(--muted)'}">
+        ${currentTools.length ? currentTools.join(', ') : techStack.maturity} stack
+       </span>` : '';
+
+  // LinkedIn DM info
+  const dmName = lead.decision_maker_full_name || lead.decision_maker_name || '';
+  const dmTitle = lead.decision_maker_title || '';
+  const dmLinkedin = lead.decision_maker_linkedin || '';
+  const dmBlock = dmName ? `
+    <div style="font-size:.68rem;color:var(--muted);margin-bottom:4px">DECISION MAKER</div>
+    <div style="font-size:.76rem;display:flex;align-items:center;gap:8px">
+      <span>👤 <strong>${escHtml(dmName)}</strong>${dmTitle ? ' · ' + escHtml(dmTitle) : ''}</span>
+      ${dmLinkedin ? `<a href="${escHtml(dmLinkedin)}" target="_blank" rel="noopener"
+          style="color:var(--blue);font-size:.68rem;text-decoration:none">LinkedIn ↗</a>` : ''}
+    </div>` : '';
+
+  // Pitch angle from tech stack
+  const pitchAngle = techStack.pitch_angle
+    ? `<div style="font-size:.72rem;color:var(--amber);border-left:2px solid var(--amber);padding-left:8px;margin-top:4px;line-height:1.5">
+        💡 ${escHtml(techStack.pitch_angle)}
+       </div>` : '';
+
+  // Email sequence tabs
   let emailSection = '';
   if (lead.outreach_draft?.email_body) {
     const d = lead.outreach_draft;
+    const seq = lead.follow_up_sequence || [];
+    const allEmails = [
+      { label: 'Day 1 — Cold Intro', subject: d.subject, body: d.email_body },
+      ...seq.map(s => ({ label: `Day ${s.day} — Follow-up`, subject: s.subject, body: s.email_body }))
+    ];
+    const tabsHtml = allEmails.map((e, i) => `
+      <button class="seq-tab${i===0?' active':''}" onclick="switchTab(this,'seq-${idx}',${i})"
+        style="padding:4px 10px;font-size:.7rem;border:1px solid var(--border);border-radius:4px;
+               background:${i===0?'var(--teal)':'var(--navy-lite)'};
+               color:${i===0?'var(--navy)':'var(--muted)'};cursor:pointer;font-family:var(--font)">
+        ${e.label}
+      </button>`).join('');
+    const panelsHtml = allEmails.map((e, i) => `
+      <div class="seq-panel" id="seq-${idx}-${i}" style="display:${i===0?'flex':'none'};flex-direction:column;gap:8px">
+        <div class="email-subject"><span>Subject: </span>${escHtml(e.subject || '')}</div>
+        <div class="email-text">${escHtml(e.body || '')}</div>
+        <button class="copy-btn" onclick="copyText(this, ${JSON.stringify(e.body||'')})">Copy</button>
+      </div>`).join('');
     emailSection = `
       <div class="email-section">
         <button class="email-toggle" onclick="toggleEmail(this,'${idx}')">
-          <span class="arrow">▶</span> View Outreach Email
+          <span class="arrow">▶</span> View ${allEmails.length}-Touch Outreach Sequence
         </button>
         <div class="email-body" id="email-${idx}">
-          <div class="email-subject"><span>Subject: </span>${escHtml(d.subject || '')}</div>
-          <div class="email-text">${escHtml(d.email_body || '')}</div>
-          <button class="copy-btn" onclick="copyEmail(this,'${idx}')">Copy email</button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tabsHtml}</div>
+          <div id="seq-${idx}">${panelsHtml}</div>
         </div>
       </div>`;
   }
@@ -857,7 +902,7 @@ function buildCard(lead, idx) {
             ${lead.size     ? `<span>👥 ${escHtml(lead.size)}</span>` : ''}
             ${lead.location ? `<span>📍 ${escHtml(lead.location)}</span>` : ''}
           </div>
-          <div style="margin-top:5px">${website}</div>
+          <div style="margin-top:5px;display:flex;gap:6px;align-items:center">${website} ${techBadge}</div>
         </div>
         <div class="card-badges">
           ${score != null ? `<span class="badge ${scoreClass}">${score}/10</span>` : ''}
@@ -867,7 +912,9 @@ function buildCard(lead, idx) {
       <div class="card-body">
         ${lead.description && !lead.summary ? `<div style="font-size:.78rem;color:#B0C4D8;line-height:1.55">${escHtml(lead.description)}</div>` : ''}
         ${summaryBlock}
+        ${dmBlock}
         ${contactBlock}
+        ${pitchAngle}
         ${painTags ? `<div><div style="font-size:.68rem;color:var(--muted);margin-bottom:4px">PAIN POINTS</div><div class="pain-points">${painTags}</div></div>` : ''}
         ${qualReason}
       </div>
@@ -890,6 +937,26 @@ function copyEmail(btn, idx) {
   navigator.clipboard.writeText(text).then(() => {
     btn.textContent = '✓ Copied!'; btn.classList.add('copied');
     setTimeout(() => { btn.textContent = 'Copy email'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function copyText(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✓ Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function switchTab(btn, seqId, idx) {
+  // Update tab buttons
+  btn.closest('div').querySelectorAll('.seq-tab').forEach((t, i) => {
+    t.style.background = i === idx ? 'var(--teal)' : 'var(--navy-lite)';
+    t.style.color = i === idx ? 'var(--navy)' : 'var(--muted)';
+  });
+  // Show/hide panels
+  const container = document.getElementById(seqId);
+  container.querySelectorAll('.seq-panel').forEach((p, i) => {
+    p.style.display = i === idx ? 'flex' : 'none';
   });
 }
 

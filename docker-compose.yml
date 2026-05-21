@@ -87,6 +87,36 @@ services:
     profiles:
       - full
 
+  celery_beat:
+    build: .
+    # Beat + worker combined: runs the scheduler AND executes tasks in one container
+    command: celery -A worker worker --beat --loglevel=info --concurrency=1
+    env_file: .env
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - REDIS_URL=redis://redis:6379
+      - PYTHONPATH=/app
+      - SCHEDULE_ENABLED=true
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+      - ./agents:/app/agents
+      - ./api:/app/api
+      - ./cache:/app/cache
+      - ./core:/app/core
+      - ./graph:/app/graph
+      - ./models:/app/models
+      - ./notifications:/app/notifications
+      - ./observability:/app/observability
+      - ./rag:/app/rag
+      - ./tools:/app/tools
+      - ./worker.py:/app/worker.py
+    profiles:
+      - full
+
   postgres:
     image: pgvector/pgvector:pg16
     environment:

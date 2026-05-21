@@ -15,6 +15,8 @@ import uuid
 from graph.state import LeadState
 from agents.base import BaseAgent
 from tools.web_search import search_companies_multi_source, scrape_company_info, scrape_company_contacts
+from tools.linkedin_enricher import enrich_decision_maker
+from tools.tech_stack_detector import detect_tech_stack
 from cache.redis_client import is_duplicate_lead, mark_lead_seen
 from rag.hallucination_guard import guard_llm_response
 from observability.langsmith_tracer import stage_timer, log_hallucination_event
@@ -122,6 +124,23 @@ class ResearchAgent(BaseAgent):
                     lead_data["phone"] = contacts["phone"]
                 if contacts["address"] and not lead_data.get("address"):
                     lead_data["address"] = contacts["address"]
+
+                # LinkedIn decision maker enrichment
+                domain = url.replace("https://", "").replace("http://", "").split("/")[0]
+                dm = enrich_decision_maker(lead_data.get("company_name", ""), domain)
+                lead_data["decision_maker_name"] = dm.get("name", "")
+                lead_data["decision_maker_full_name"] = dm.get("full_name", "")
+                lead_data["decision_maker_title"] = dm.get("title", "")
+                lead_data["decision_maker_linkedin"] = dm.get("linkedin_url", "")
+                # Merge inferred email guesses with regex-found emails
+                all_emails = list(dict.fromkeys(
+                    lead_data.get("contact_emails", []) + dm.get("email_guesses", [])
+                ))
+                lead_data["contact_emails"] = all_emails
+                lead_data["email_guesses"] = dm.get("email_guesses", [])
+
+                # Tech stack detection
+                lead_data["tech_stack"] = detect_tech_stack(url, lead_data.get("company_name", ""))
 
                 # Deduplication: skip if processed in last 24 hours
                 if is_duplicate_lead(company_name):

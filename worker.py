@@ -20,6 +20,7 @@ This means the default docker compose up (no worker) keeps working exactly as be
 """
 import os
 from celery import Celery
+from celery.schedules import crontab
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
 CELERY_BROKER = os.getenv("CELERY_BROKER_URL", f"{REDIS_URL}/1")
@@ -38,6 +39,38 @@ celery_app.conf.update(
     result_expires=3600,
     task_track_started=True,
 )
+
+# ── Celery Beat: Scheduled Daily Lead Generation ───────────────────────────────
+# Reads settings at import time so beat respects SCHEDULE_* env vars.
+# To enable: set SCHEDULE_ENABLED=true in .env, then start the beat scheduler:
+#   celery -A worker beat --loglevel=info
+# Or combined: celery -A worker worker --beat --loglevel=info
+def _setup_beat_schedule():
+    try:
+        from core.config import get_settings
+        s = get_settings()
+        if not s.schedule_enabled:
+            return
+        celery_app.conf.beat_schedule = {
+            "daily-lead-generation": {
+                "task": "tasks.run_pipeline",
+                "schedule": crontab(hour=s.schedule_hour, minute=s.schedule_minute),
+                "kwargs": {
+                    "keyword": s.schedule_keyword,
+                    "run_id": "scheduled-daily",
+                },
+            },
+        }
+        celery_app.conf.timezone = "Asia/Kolkata"
+        import logging
+        logging.getLogger("celery").info(
+            f"Celery Beat scheduled: daily at {s.schedule_hour:02d}:{s.schedule_minute:02d} IST "
+            f"| keyword='{s.schedule_keyword}'"
+        )
+    except Exception:
+        pass  # Beat schedule is optional — don't crash worker startup
+
+_setup_beat_schedule()
 
 
 @celery_app.task(bind=True, name="tasks.run_pipeline", max_retries=2)

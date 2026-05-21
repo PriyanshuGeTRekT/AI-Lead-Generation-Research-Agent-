@@ -376,6 +376,7 @@ def approve_lead_get(lead_id: str):
 def approve_lead(lead_id: str):
     """
     Approve a pending_review lead, marking it outreach_ready.
+    Also triggers CRM push (webhook / Google Sheets) if configured.
     Called by a human reviewer after inspecting the Slack notification.
     The lead will then appear in GET /leads?status=outreach_ready.
     """
@@ -390,6 +391,14 @@ def approve_lead(lead_id: str):
         )
     lead["status"] = "outreach_ready"
     _save_leads(leads)
+
+    # Push to CRM after approval (fire-and-forget, never blocks the response)
+    try:
+        from tools.crm_push import push_lead_to_crm
+        push_lead_to_crm(lead)
+    except Exception:
+        pass  # CRM push failure must never break approval flow
+
     return {"message": f"Lead {lead_id} approved", "lead": lead}
 
 

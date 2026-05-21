@@ -77,6 +77,17 @@ class Settings(BaseSettings):
     use_pgvector: bool = False           # set True to use pgvector instead of ChromaDB
     postgres_url: str = "postgresql://leadgen:leadgen@postgres:5432/leadgen"
 
+    # ── CRM Integration ───────────────────────────────────────────────────────
+    crm_webhook_url: str = ""            # Webhook URL (HubSpot/Zapier/Make/custom)
+    google_sheets_id: str = ""           # Google Sheet ID for CRM push (optional)
+    google_service_account_json: str = "" # Service account JSON string (optional)
+
+    # ── Scheduled Runs (Celery Beat) ─────────────────────────────────────────
+    schedule_enabled: bool = False       # Set True to enable daily scheduled runs
+    schedule_hour: int = 8               # Hour to run (24h, IST)
+    schedule_minute: int = 0             # Minute to run
+    schedule_keyword: str = "manufacturing company India 200 employees"  # Daily keyword
+
     class Config:
         env_file = ".env"
         case_sensitive = False
