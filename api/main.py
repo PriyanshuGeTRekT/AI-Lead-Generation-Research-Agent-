@@ -290,6 +290,23 @@ def pipeline_status(run_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/flush-cache")
+def flush_cache():
+    """
+    Flush the Redis deduplication cache so the next pipeline run can
+    re-process companies that were previously seen.  Also clears the
+    Celery result backend (DB 1) so stale job states are removed.
+    """
+    try:
+        r = get_redis()
+        if r:
+            r.flushall()   # clears all Redis DBs (dedup + Celery results)
+            return {"status": "ok", "message": "Redis flushed — next run starts fresh"}
+        return {"status": "degraded", "message": "Redis not available"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/leads")
 def get_leads(status: Optional[str] = None):
     """
