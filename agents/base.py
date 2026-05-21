@@ -6,34 +6,22 @@ All agents inherit from BaseAgent to get:
   - Retry logic with exponential backoff
   - LLM call wrapper with error handling
   - Redis caching for LLM responses
-  - LangSmith tracing on every LLM call (automatic via ChatGroq)
+  - LangSmith tracing on every LLM call
 
-Architectural Decision:
-  Without a base class, each agent reimplements retry logic, logging,
-  and error handling differently, which leads to inconsistent behavior
-  and maintenance burden. The base class enforces a contract:
-  every agent handles failures the same way, logs the same fields,
-  and benefits from caching automatically.
+LLM Priority:
+  1. DeepSeek (if DEEPSEEK_API_KEY set) — higher rate limits, OpenAI-compatible
+  2. Groq (fallback)                    — fast inference, 30 req/min free tier
 
 LangSmith Tracing:
-  We use ChatGroq (langchain_groq) instead of the raw Groq SDK.
-  LangChain-wrapped LLM calls are automatically traced by LangSmith
-  when LANGCHAIN_TRACING_V2=true is set. This means every prompt,
-  response, token count, and latency appears in the LangSmith dashboard
-  per pipeline run, giving full visibility into what each agent actually
-  sent and received from the model.
-
-  The raw Groq SDK (groq.Groq) bypasses this tracing entirely since
-  LangSmith only intercepts calls made through LangChain Runnable objects.
+  Both ChatOpenAI (DeepSeek) and ChatGroq are LangChain Runnable objects,
+  so calls are automatically traced when LANGCHAIN_TRACING_V2=true.
 """
 import json
 import re
 import time
 import uuid
 from abc import ABC, abstractmethod
-from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage
-from groq import RateLimitError, APIError
 from core.config import get_settings
 from core.exceptions import LLMError, LLMRateLimitError, LLMResponseParseError
 from cache.redis_client import get_cached, set_cached, cache_key
@@ -53,14 +41,23 @@ class BaseAgent(ABC):
         self.correlation_id = correlation_id or str(uuid.uuid4())[:8]
         self.log = logger.bind(agent=self.name, correlation_id=self.correlation_id)
 
-    def _get_llm(self, temperature: float, max_tokens: int) -> ChatGroq:
+    def _get_llm(self, temperature: float, max_tokens: int):
         """
-        Return a ChatGroq instance configured for this specific call.
+        Return an LLM instance. DeepSeek is preferred (higher rate limits);
+        falls back to Groq if DEEPSEEK_API_KEY is not set.
         Creating per-call is intentional: temperature and max_tokens differ
-        between extraction calls (low temp, shorter output) and creative
-        calls (higher temp, longer output). ChatGroq construction is cheap,
-        the cost is in the network call.
+        between extraction (low temp) and creative (higher temp) calls.
         """
+        if settings.deepseek_api_key:
+            from langchain_openai import ChatOpenAI
+            return ChatOpenAI(
+                model=settings.deepseek_model,
+                openai_api_key=settings.deepseek_api_key,
+                openai_api_base="https://api.deepseek.com",
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        from langchain_groq import ChatGroq
         return ChatGroq(
             api_key=settings.groq_api_key,
             model=settings.groq_model,
@@ -102,10 +99,12 @@ class BaseAgent(ABC):
 
         llm = self._get_llm(temperature, max_tokens)
 
-        # Retry loop with exponential backoff
+        provider = "DeepSeek" if settings.deepseek_api_key else "Groq"
+
+        # Retry loop with exponential backoff (works for both Groq and DeepSeek)
         for attempt in range(self.max_retries):
             try:
-                self.log.debug(f"LLM call attempt {attempt + 1}/{self.max_retries}")
+                self.log.debug(f"[{provider}] LLM call attempt {attempt + 1}/{self.max_retries}")
                 response = llm.invoke([HumanMessage(content=prompt)])
                 result = response.content.strip()
 
@@ -115,29 +114,21 @@ class BaseAgent(ABC):
 
                 return result
 
-            except RateLimitError:
-                delay = self.base_delay * (2 ** attempt)
-                self.log.warning(f"Rate limit hit. Retrying in {delay}s...")
-                time.sleep(delay)
-                if attempt == self.max_retries - 1:
-                    raise LLMRateLimitError("Groq rate limit exceeded after retries")
-
-            except APIError as e:
-                self.log.error(f"Groq API error: {e}")
-                raise LLMError(f"LLM API error: {e}")
-
             except Exception as e:
-                # Catch any LangChain-wrapped exceptions that don't surface as
-                # groq native types (e.g. connection errors, unexpected responses)
                 err_str = str(e).lower()
-                if "rate" in err_str and ("limit" in err_str or "429" in err_str):
+                is_rate_limit = (
+                    "rate" in err_str and ("limit" in err_str or "429" in err_str)
+                    or "429" in err_str
+                    or "too many requests" in err_str
+                )
+                if is_rate_limit:
                     delay = self.base_delay * (2 ** attempt)
-                    self.log.warning(f"Rate limit (wrapped). Retrying in {delay}s...")
+                    self.log.warning(f"[{provider}] Rate limit hit. Retrying in {delay}s…")
                     time.sleep(delay)
                     if attempt == self.max_retries - 1:
-                        raise LLMRateLimitError("Rate limit exceeded after retries")
+                        raise LLMRateLimitError(f"{provider} rate limit exceeded after retries")
                 else:
-                    self.log.error(f"Unexpected LLM error: {e}")
+                    self.log.error(f"[{provider}] LLM error: {e}")
                     raise LLMError(f"LLM error: {e}")
 
         raise LLMError("LLM call failed after all retries")

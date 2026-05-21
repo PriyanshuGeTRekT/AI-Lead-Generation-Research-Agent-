@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     serper_api_key: str = ""             # Serper.dev Google Search API key (optional)
     instantly_api_key: str = ""          # Instantly.ai Lead Finder API key (optional, 1k free credits)
 
+    # ── DeepSeek LLM (preferred over Groq — higher rate limits) ──────────────
+    deepseek_api_key: str = ""           # DeepSeek API key (OpenAI-compatible)
+    deepseek_model: str = "deepseek-chat"  # deepseek-chat = DeepSeek-V3
+
     # ── Human-in-the-Loop (Slack) ─────────────────────────────────────────────
     slack_webhook_url: str = ""          # Slack Incoming Webhook URL (optional)
     base_url: str = "http://localhost:8000"  # used in Slack approve/reject links
