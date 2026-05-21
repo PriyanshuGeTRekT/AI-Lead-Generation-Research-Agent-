@@ -16,13 +16,13 @@
       --teal:      #00B4A6;
       --teal-dim:  #007A72;
       --blue:      #2E86AB;
-      --blue-dim:  #1E5F7A;
       --white:     #F4F7FA;
       --muted:     #8FA3B8;
       --border:    #2A3D52;
       --green:     #2ECC71;
       --amber:     #F39C12;
       --red:       #E74C3C;
+      --purple:    #9B59B6;
       --font:      'Inter', system-ui, sans-serif;
       --mono:      'JetBrains Mono', monospace;
       --radius:    10px;
@@ -31,163 +31,159 @@
 
     body { font-family: var(--font); background: var(--navy); color: var(--white); min-height: 100vh; display: flex; flex-direction: column; }
 
-    /* ── Top bar ─────────────────────────────────────────────────────── */
+    /* ── Header ──────────────────────────────────────────────────────────── */
     header {
       background: var(--navy-mid); border-bottom: 1px solid var(--border);
-      padding: 0 28px; height: 60px; display: flex; align-items: center;
+      padding: 0 24px; height: 58px; display: flex; align-items: center;
       justify-content: space-between; position: sticky; top: 0; z-index: 100;
+      gap: 16px;
     }
-    .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1rem; color: var(--white); text-decoration: none; }
-    .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--teal), var(--blue)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
-    .logo span { color: var(--teal); }
-    .header-right { display: flex; align-items: center; gap: 16px; }
-    .header-status { display: flex; align-items: center; gap: 8px; font-size: .8rem; color: var(--muted); }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-    .dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
-    .dot.amber { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: .95rem; color: var(--white); flex-shrink: 0; }
+    .logo-icon { width: 30px; height: 30px; background: linear-gradient(135deg, var(--teal), var(--blue)); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+    .logo em { color: var(--teal); font-style: normal; }
+    .header-center { display: flex; gap: 8px; flex: 1; max-width: 480px; }
+    .header-search {
+      flex: 1; background: var(--navy-lite); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--white); font-family: var(--font); font-size: .8rem; padding: 6px 12px;
+    }
+    .header-search:focus { outline: none; border-color: var(--teal); }
+    .header-search::placeholder { color: var(--muted); }
+    .sort-btn {
+      padding: 6px 12px; background: var(--navy-lite); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--muted); font-size: .75rem; cursor: pointer;
+      font-family: var(--font); white-space: nowrap; transition: all .15s;
+    }
+    .sort-btn:hover, .sort-btn.active { border-color: var(--teal); color: var(--teal); }
+    .header-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .header-status { display: flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--muted); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+    .dot.green { background: var(--green); box-shadow: 0 0 5px var(--green); }
+    .dot.amber { background: var(--amber); box-shadow: 0 0 5px var(--amber); }
     .dot.red   { background: var(--red); }
-
-    /* mode badge */
-    .mode-badge {
-      font-size: .7rem; font-weight: 600; padding: 3px 10px; border-radius: 12px;
-      font-family: var(--mono); letter-spacing: .04em;
-    }
+    .mode-badge { font-size: .65rem; font-weight: 600; padding: 3px 9px; border-radius: 10px; font-family: var(--mono); letter-spacing: .04em; }
     .mode-async { background: rgba(0,180,166,.15); color: var(--teal); border: 1px solid rgba(0,180,166,.3); }
     .mode-sync  { background: rgba(143,163,184,.1); color: var(--muted); border: 1px solid var(--border); }
 
-    /* ── Layout ─────────────────────────────────────────────────────── */
-    .layout { display: grid; grid-template-columns: 340px 1fr; flex: 1; min-height: 0; }
+    /* ── Layout ──────────────────────────────────────────────────────────── */
+    .layout { display: grid; grid-template-columns: 300px 1fr; flex: 1; min-height: 0; overflow: hidden; }
 
-    /* ── Sidebar ─────────────────────────────────────────────────────── */
-    aside { background: var(--navy-mid); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 18px; gap: 20px; overflow-y: auto; }
-    .section-label { font-size: .7rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+    /* ── Sidebar ─────────────────────────────────────────────────────────── */
+    aside {
+      background: var(--navy-mid); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; padding: 16px 14px; gap: 16px;
+      overflow-y: auto; height: calc(100vh - 58px); position: sticky; top: 58px;
+    }
+    .section-label { font-size: .65rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
 
     textarea#keyword {
       background: var(--navy-lite); border: 1px solid var(--border); border-radius: var(--radius);
-      color: var(--white); font-family: var(--font); font-size: .875rem;
-      padding: 10px 12px; resize: vertical; min-height: 72px; transition: border .2s; width: 100%;
+      color: var(--white); font-family: var(--font); font-size: .82rem;
+      padding: 9px 11px; resize: vertical; min-height: 68px; width: 100%; transition: border .2s;
     }
     textarea#keyword:focus { outline: none; border-color: var(--teal); }
     textarea#keyword::placeholder { color: var(--muted); }
 
-    .btn { padding: 10px 16px; border-radius: var(--radius); font-family: var(--font); font-size: .875rem; font-weight: 600; cursor: pointer; border: none; transition: opacity .15s, transform .1s; width: 100%; }
+    .btn { padding: 9px 14px; border-radius: var(--radius); font-family: var(--font); font-size: .82rem; font-weight: 600; cursor: pointer; border: none; transition: opacity .15s, transform .1s; width: 100%; }
     .btn:active { transform: scale(.98); }
-    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
     .btn-primary { background: var(--teal); color: var(--navy); }
     .btn-primary:hover:not(:disabled) { opacity: .88; }
-    .btn-secondary { background: var(--navy-lite); color: var(--muted); border: 1px solid var(--border); }
+    .btn-secondary { background: var(--navy-lite); color: var(--muted); border: 1px solid var(--border); font-size: .78rem; }
     .btn-secondary:hover:not(:disabled) { border-color: var(--muted); color: var(--white); }
-    .btn-danger { background: rgba(231,76,60,.1); color: var(--red); border: 1px solid rgba(231,76,60,.3); }
-    .btn-danger:hover:not(:disabled) { background: rgba(231,76,60,.2); }
-    .input-group { display: flex; flex-direction: column; gap: 8px; }
+    .btn-danger { background: rgba(231,76,60,.08); color: var(--red); border: 1px solid rgba(231,76,60,.25); font-size: .78rem; }
+    .btn-danger:hover:not(:disabled) { background: rgba(231,76,60,.16); }
+    .input-group { display: flex; flex-direction: column; gap: 7px; }
 
-    /* ── Progress panel ──────────────────────────────────────────────── */
-    .progress-panel {
-      background: var(--navy); border: 1px solid var(--border); border-radius: var(--radius);
-      padding: 14px; display: none; flex-direction: column; gap: 12px;
-    }
+    /* Progress panel */
+    .progress-panel { background: var(--navy); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; display: none; flex-direction: column; gap: 10px; }
     .progress-panel.visible { display: flex; }
-
     .progress-header { display: flex; align-items: center; justify-content: space-between; }
-    .progress-title { font-weight: 600; font-size: .85rem; display: flex; align-items: center; gap: 8px; }
-
-    .pulse-ring {
-      width: 10px; height: 10px; border-radius: 50%; background: var(--teal);
-      box-shadow: 0 0 0 0 rgba(0,180,166,.4);
-      animation: pulse-anim 1.4s ease infinite;
-    }
-    @keyframes pulse-anim {
-      0%   { box-shadow: 0 0 0 0 rgba(0,180,166,.5); }
-      70%  { box-shadow: 0 0 0 8px rgba(0,180,166,0); }
-      100% { box-shadow: 0 0 0 0 rgba(0,180,166,0); }
-    }
-    .pulse-ring.done { background: var(--green); animation: none; box-shadow: 0 0 6px var(--green); }
+    .progress-title { font-weight: 600; font-size: .8rem; display: flex; align-items: center; gap: 7px; }
+    .pulse-ring { width: 9px; height: 9px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 0 rgba(0,180,166,.4); animation: pulse-anim 1.4s ease infinite; }
+    @keyframes pulse-anim { 0% { box-shadow: 0 0 0 0 rgba(0,180,166,.5); } 70% { box-shadow: 0 0 0 7px rgba(0,180,166,0); } 100% { box-shadow: 0 0 0 0 rgba(0,180,166,0); } }
+    .pulse-ring.done  { background: var(--green); animation: none; box-shadow: 0 0 5px var(--green); }
     .pulse-ring.error { background: var(--red); animation: none; }
+    .progress-elapsed { font-family: var(--mono); font-size: .78rem; color: var(--amber); font-weight: 600; }
+    .progress-bar-wrap { height: 3px; background: var(--navy-lite); border-radius: 2px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--teal), var(--blue)); border-radius: 2px; transition: width .6s ease; width: 0%; }
 
-    .progress-run-id { font-family: var(--mono); font-size: .68rem; color: var(--muted); }
-    .progress-elapsed { font-family: var(--mono); font-size: .82rem; color: var(--amber); font-weight: 600; }
-
-    /* progress bar */
-    .progress-bar-wrap {
-      height: 4px; background: var(--navy-lite); border-radius: 2px; overflow: hidden;
-    }
-    .progress-bar-fill {
-      height: 100%; background: linear-gradient(90deg, var(--teal), var(--blue));
-      border-radius: 2px; transition: width .6s ease;
-      width: 0%;
-    }
-
-    /* stage steps */
-    .stage-steps { display: flex; flex-direction: column; gap: 6px; }
-    .stage-step {
-      display: flex; align-items: center; gap: 10px;
-      padding: 7px 10px; border-radius: 6px; font-size: .78rem;
-      background: var(--navy-lite); border: 1px solid var(--border);
-      transition: all .3s;
-    }
+    .stage-steps { display: flex; flex-direction: column; gap: 5px; }
+    .stage-step { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 6px; font-size: .73rem; background: var(--navy-lite); border: 1px solid var(--border); transition: all .3s; }
     .stage-step.active { border-color: var(--teal); color: var(--white); background: rgba(0,180,166,.07); }
-    .stage-step.done   { border-color: var(--green); color: var(--muted); }
+    .stage-step.done   { border-color: rgba(46,204,113,.4); color: var(--muted); }
     .stage-step.wait   { color: var(--muted); }
-
-    .step-icon { font-size: .9rem; width: 18px; text-align: center; flex-shrink: 0; }
+    .step-icon { font-size: .85rem; width: 16px; text-align: center; flex-shrink: 0; }
     .step-label { flex: 1; }
-    .step-time { font-family: var(--mono); font-size: .68rem; color: var(--muted); }
+    .step-sub { font-size: .62rem; color: var(--muted); opacity: .7; }
+    .step-time { font-family: var(--mono); font-size: .62rem; color: var(--muted); }
 
-    /* lead count ticker */
-    .progress-counts { display: flex; gap: 10px; }
-    .pcount { flex: 1; text-align: center; background: var(--navy-lite); border: 1px solid var(--border); border-radius: 6px; padding: 6px 4px; }
-    .pcount-val { font-family: var(--mono); font-size: 1.1rem; font-weight: 700; }
-    .pcount-label { font-size: .62rem; color: var(--muted); margin-top: 2px; }
-
-    .eta-row { font-size: .75rem; color: var(--muted); text-align: center; }
+    .progress-counts { display: flex; gap: 8px; }
+    .pcount { flex: 1; text-align: center; background: var(--navy-lite); border: 1px solid var(--border); border-radius: 6px; padding: 5px 3px; }
+    .pcount-val { font-family: var(--mono); font-size: 1rem; font-weight: 700; }
+    .pcount-label { font-size: .58rem; color: var(--muted); margin-top: 1px; }
+    .eta-row { font-size: .72rem; color: var(--muted); text-align: center; }
     .eta-row span { color: var(--amber); font-weight: 600; }
+    .progress-run-id { font-family: var(--mono); font-size: .62rem; color: var(--muted); }
 
-    /* ── Stats pills ─────────────────────────────────────────────────── */
-    .pill-row { display: flex; flex-direction: column; gap: 6px; }
-    .status-pill { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; border-radius: 6px; font-size: .8rem; background: var(--navy-lite); border: 1px solid var(--border); }
+    /* Stats pills */
+    .pill-row { display: flex; flex-direction: column; gap: 5px; }
+    .status-pill { display: flex; align-items: center; justify-content: space-between; padding: 6px 9px; border-radius: 6px; font-size: .76rem; background: var(--navy-lite); border: 1px solid var(--border); }
     .pill-label { color: var(--muted); }
-    .pill-val { font-weight: 600; font-family: var(--mono); font-size: .8rem; }
-    .pill-val.green { color: var(--green); }
-    .pill-val.amber { color: var(--amber); }
-    .pill-val.red   { color: var(--red); }
-    .pill-val.teal  { color: var(--teal); }
+    .pill-val { font-weight: 600; font-family: var(--mono); font-size: .76rem; }
+    .pill-val.green  { color: var(--green); }
+    .pill-val.amber  { color: var(--amber); }
+    .pill-val.red    { color: var(--red); }
+    .pill-val.teal   { color: var(--teal); }
+    .pill-val.purple { color: var(--purple); }
 
-    /* log box */
-    .log-box { background: var(--navy); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font-family: var(--mono); font-size: .72rem; color: var(--muted); max-height: 160px; overflow-y: auto; line-height: 1.7; }
-    .log-box .log-line { color: var(--teal); }
-    .log-box .log-err  { color: var(--red); }
+    /* Log box */
+    .log-box { background: var(--navy); border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 11px; font-family: var(--mono); font-size: .68rem; color: var(--muted); max-height: 130px; overflow-y: auto; line-height: 1.75; }
+    .log-box .log-line  { color: var(--teal); }
+    .log-box .log-err   { color: var(--red); }
+    .log-box .log-warn  { color: var(--amber); }
     .log-box .log-empty { color: var(--muted); font-style: italic; }
 
-    /* ── Main content ─────────────────────────────────────────────────── */
-    main { padding: 28px; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; }
+    /* ── Main content ─────────────────────────────────────────────────────── */
+    main { padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; height: calc(100vh - 58px); }
 
-    .metrics-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
-    .metric-card { background: var(--navy-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
-    .metric-card .mc-val { font-size: 1.6rem; font-weight: 700; font-family: var(--mono); line-height: 1; margin-bottom: 4px; }
-    .metric-card .mc-label { font-size: .72rem; color: var(--muted); }
+    /* Metrics strip */
+    .metrics-strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+    .metric-card { background: var(--navy-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+    .metric-card .mc-val { font-size: 1.5rem; font-weight: 700; font-family: var(--mono); line-height: 1; margin-bottom: 3px; }
+    .metric-card .mc-label { font-size: .67rem; color: var(--muted); }
 
-    .filter-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .filter-label { font-size: .8rem; color: var(--muted); margin-right: 4px; }
-    .chip { padding: 5px 12px; border-radius: 20px; font-size: .78rem; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--muted); transition: all .15s; font-family: var(--font); }
+    /* Filter bar */
+    .filter-bar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .filter-label { font-size: .76rem; color: var(--muted); margin-right: 2px; }
+    .chip { padding: 4px 11px; border-radius: 18px; font-size: .74rem; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--muted); transition: all .15s; font-family: var(--font); display: flex; align-items: center; gap: 5px; }
     .chip:hover { border-color: var(--teal); color: var(--teal); }
     .chip.active { background: var(--teal); color: var(--navy); border-color: var(--teal); }
+    .chip .chip-count { font-size: .65rem; font-family: var(--mono); opacity: .8; }
+    .export-btn {
+      margin-left: auto; padding: 4px 13px; border-radius: 18px; font-size: .74rem; font-weight: 600;
+      border: 1px solid rgba(0,180,166,.35); color: var(--teal); background: rgba(0,180,166,.07);
+      text-decoration: none; transition: all .15s; display: flex; align-items: center; gap: 5px;
+    }
+    .export-btn:hover { background: rgba(0,180,166,.16); }
 
-    /* ── Lead cards ───────────────────────────────────────────────────── */
-    .leads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 16px; }
-    .empty-state { grid-column: 1/-1; text-align: center; padding: 64px 24px; color: var(--muted); }
-    .empty-state .es-icon { font-size: 3rem; margin-bottom: 12px; opacity: .4; }
-    .empty-state p { font-size: .9rem; line-height: 1.6; }
+    /* Leads grid */
+    .leads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 14px; }
+    .empty-state { grid-column: 1/-1; text-align: center; padding: 56px 24px; color: var(--muted); }
+    .empty-state .es-icon { font-size: 2.8rem; margin-bottom: 12px; opacity: .35; }
+    .empty-state p { font-size: .88rem; line-height: 1.65; }
 
-    .lead-card { background: var(--navy-mid); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: border-color .2s, transform .15s; }
-    .lead-card:hover { border-color: var(--teal); transform: translateY(-2px); }
+    /* ── Lead Card ─────────────────────────────────────────────────────────── */
+    .lead-card { background: var(--navy-mid); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: border-color .2s, box-shadow .2s; }
+    .lead-card:hover { border-color: var(--teal); box-shadow: 0 4px 20px rgba(0,180,166,.1); }
+    .lead-card.crm-pushed { border-color: rgba(46,204,113,.5); }
 
-    .card-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-    .card-company { font-weight: 700; font-size: .95rem; }
-    .card-meta { font-size: .75rem; color: var(--muted); margin-top: 2px; }
-    .card-meta span { margin-right: 8px; }
-    .card-badges { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+    .card-header { padding: 12px 14px 9px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .card-company { font-weight: 700; font-size: .92rem; line-height: 1.2; }
+    .card-meta { font-size: .72rem; color: var(--muted); margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+    .card-meta-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+    .card-badges { display: flex; gap: 5px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
 
-    .badge { padding: 3px 9px; border-radius: 12px; font-size: .68rem; font-weight: 600; white-space: nowrap; }
+    .badge { padding: 2px 8px; border-radius: 10px; font-size: .64rem; font-weight: 600; white-space: nowrap; }
     .badge-score-high { background: rgba(46,204,113,.15); color: var(--green); border: 1px solid rgba(46,204,113,.3); }
     .badge-score-mid  { background: rgba(243,156,18,.15);  color: var(--amber); border: 1px solid rgba(243,156,18,.3); }
     .badge-score-low  { background: rgba(231,76,60,.15);   color: var(--red);   border: 1px solid rgba(231,76,60,.3); }
@@ -196,48 +192,112 @@
     .badge-qualified  { background: rgba(46,134,171,.15);  color: var(--blue);  border: 1px solid rgba(46,134,171,.3); }
     .badge-disqualified { background: rgba(231,76,60,.1);  color: var(--red);   border: 1px solid rgba(231,76,60,.2); }
     .badge-researched { background: rgba(143,163,184,.1);  color: var(--muted); border: 1px solid var(--border); }
+    .badge-crm        { background: rgba(46,204,113,.12);  color: var(--green); border: 1px solid rgba(46,204,113,.25); }
 
-    .card-body { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
-    .pain-points { display: flex; flex-wrap: wrap; gap: 5px; }
-    .pain-tag { padding: 2px 7px; background: var(--navy-lite); border: 1px solid var(--border); border-radius: 4px; font-size: .68rem; color: var(--muted); }
-    .qual-reason { font-size: .76rem; color: var(--muted); line-height: 1.55; border-left: 2px solid var(--teal-dim); padding-left: 10px; }
+    .card-body { padding: 11px 14px; display: flex; flex-direction: column; gap: 9px; flex: 1; }
 
-    /* summary block */
-    .lead-summary { font-family: var(--mono); font-size: .7rem; color: #B0C4D8; line-height: 1.6; background: var(--navy); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; white-space: pre-wrap; }
+    /* Card sections */
+    .card-section { display: flex; flex-direction: column; gap: 4px; }
+    .card-section-label { font-size: .62rem; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
 
+    /* DM block */
+    .dm-row { display: flex; align-items: center; gap: 8px; font-size: .76rem; }
+    .dm-avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, var(--blue), var(--teal)); display: flex; align-items: center; justify-content: center; font-size: .65rem; font-weight: 700; color: var(--navy); flex-shrink: 0; }
+    .dm-info { flex: 1; min-width: 0; }
+    .dm-name { font-weight: 600; font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dm-title { font-size: .68rem; color: var(--muted); }
+    .dm-linkedin { font-size: .68rem; color: var(--blue); text-decoration: none; white-space: nowrap; }
+    .dm-linkedin:hover { color: var(--teal); }
+
+    /* Contact info */
+    .contact-row { display: flex; flex-direction: column; gap: 3px; }
+    .contact-item { font-size: .74rem; display: flex; align-items: flex-start; gap: 6px; }
+    .contact-icon { opacity: .6; flex-shrink: 0; width: 14px; }
+    .contact-emails-wrap { display: flex; flex-wrap: wrap; gap: 4px; }
+    .email-chip {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 1px 7px; border-radius: 4px; font-size: .67rem;
+      background: var(--navy-lite); border: 1px solid var(--border);
+    }
+    .email-chip a { color: var(--teal); text-decoration: none; }
+    .email-chip a:hover { text-decoration: underline; }
+    .email-chip .q-high   { color: var(--green); font-size: .6rem; }
+    .email-chip .q-medium { color: var(--amber); font-size: .6rem; }
+    .email-chip .q-low    { color: var(--muted);  font-size: .6rem; }
+
+    /* Tech stack */
+    .tech-row { display: flex; align-items: flex-start; gap: 8px; }
+    .tech-badge {
+      padding: 2px 8px; border-radius: 4px; font-size: .65rem; font-weight: 600;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .tech-legacy  { background: rgba(243,156,18,.12); color: var(--amber); border: 1px solid rgba(243,156,18,.3); }
+    .tech-modern  { background: rgba(46,134,171,.12);  color: var(--blue);  border: 1px solid rgba(46,134,171,.3); }
+    .tech-manual  { background: rgba(231,76,60,.1);    color: var(--red);   border: 1px solid rgba(231,76,60,.25); }
+    .tech-unknown { background: var(--navy-lite);      color: var(--muted); border: 1px solid var(--border); }
+    .pitch-text { font-size: .71rem; color: var(--amber); line-height: 1.5; }
+
+    /* Pain points */
+    .pain-points { display: flex; flex-wrap: wrap; gap: 4px; }
+    .pain-tag { padding: 2px 7px; background: var(--navy-lite); border: 1px solid var(--border); border-radius: 4px; font-size: .65rem; color: var(--muted); }
+
+    /* Summary block */
+    .lead-summary { font-family: var(--mono); font-size: .67rem; color: #B0C4D8; line-height: 1.65; background: var(--navy); border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px; white-space: pre-wrap; }
+
+    /* Score bar */
+    .score-bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .score-bar-bg { flex: 1; height: 4px; background: var(--navy-lite); border-radius: 2px; overflow: hidden; }
+    .score-bar-fill { height: 100%; border-radius: 2px; transition: width .5s ease; }
+
+    /* ── Email sequence ─────────────────────────────────────────────────── */
     .email-section { border-top: 1px solid var(--border); }
-    .email-toggle { width: 100%; background: none; border: none; color: var(--teal); font-family: var(--font); font-size: .78rem; font-weight: 600; cursor: pointer; padding: 10px 16px; text-align: left; display: flex; align-items: center; gap: 6px; transition: opacity .15s; }
+    .email-toggle {
+      width: 100%; background: none; border: none; color: var(--teal); font-family: var(--font);
+      font-size: .76rem; font-weight: 600; cursor: pointer; padding: 9px 14px;
+      text-align: left; display: flex; align-items: center; gap: 6px; transition: opacity .15s;
+    }
     .email-toggle:hover { opacity: .8; }
-    .email-toggle .arrow { transition: transform .2s; display: inline-block; }
-    .email-toggle.open .arrow { transform: rotate(90deg); }
-    .email-body { display: none; padding: 0 16px 14px; flex-direction: column; gap: 10px; }
+    .email-body { display: none; padding: 0 14px 12px; flex-direction: column; gap: 10px; }
     .email-body.visible { display: flex; }
-    .email-subject { font-weight: 600; font-size: .8rem; color: var(--white); }
+
+    .seq-tabs { display: flex; gap: 5px; flex-wrap: wrap; }
+    .seq-tab {
+      padding: 4px 10px; font-size: .68rem; border: 1px solid var(--border); border-radius: 5px;
+      background: var(--navy-lite); color: var(--muted); cursor: pointer; font-family: var(--font);
+      font-weight: 500; transition: all .15s;
+    }
+    .seq-tab.active { background: var(--teal); color: var(--navy); border-color: var(--teal); font-weight: 600; }
+    .seq-panel { flex-direction: column; gap: 8px; }
+    .email-subject { font-weight: 600; font-size: .78rem; color: var(--white); }
     .email-subject span { color: var(--muted); font-weight: 400; }
-    .email-text { font-size: .78rem; color: #C8D8E8; line-height: 1.65; white-space: pre-wrap; background: var(--navy); border: 1px solid var(--border); border-radius: 6px; padding: 12px; }
-    .copy-btn { align-self: flex-end; padding: 5px 12px; background: var(--navy-lite); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: .72rem; cursor: pointer; font-family: var(--font); transition: all .15s; }
+    .email-text { font-size: .75rem; color: #C8D8E8; line-height: 1.7; white-space: pre-wrap; background: var(--navy); border: 1px solid var(--border); border-radius: 6px; padding: 11px; max-height: 220px; overflow-y: auto; }
+    .copy-btn { align-self: flex-end; padding: 4px 11px; background: var(--navy-lite); border: 1px solid var(--border); border-radius: 5px; color: var(--muted); font-size: .68rem; cursor: pointer; font-family: var(--font); transition: all .15s; }
     .copy-btn:hover { border-color: var(--teal); color: var(--teal); }
     .copy-btn.copied { border-color: var(--green); color: var(--green); }
 
-    /* approve/reject buttons */
-    .review-actions { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); }
-    .btn-approve { flex: 1; padding: 7px; border-radius: 6px; border: 1px solid rgba(46,204,113,.4); background: rgba(46,204,113,.1); color: var(--green); font-size: .78rem; font-weight: 600; cursor: pointer; font-family: var(--font); transition: all .15s; }
-    .btn-approve:hover { background: rgba(46,204,113,.2); }
-    .btn-reject  { flex: 1; padding: 7px; border-radius: 6px; border: 1px solid rgba(231,76,60,.3); background: rgba(231,76,60,.08); color: var(--red); font-size: .78rem; font-weight: 600; cursor: pointer; font-family: var(--font); transition: all .15s; }
-    .btn-reject:hover { background: rgba(231,76,60,.18); }
+    /* Review actions */
+    .review-actions { display: flex; gap: 7px; padding: 9px 14px; border-top: 1px solid var(--border); }
+    .btn-approve { flex: 1; padding: 7px; border-radius: 6px; border: 1px solid rgba(46,204,113,.4); background: rgba(46,204,113,.1); color: var(--green); font-size: .76rem; font-weight: 600; cursor: pointer; font-family: var(--font); transition: all .15s; }
+    .btn-approve:hover:not(:disabled) { background: rgba(46,204,113,.2); }
+    .btn-approve:disabled { opacity: .5; cursor: default; }
+    .btn-reject  { flex: 1; padding: 7px; border-radius: 6px; border: 1px solid rgba(231,76,60,.3); background: rgba(231,76,60,.07); color: var(--red); font-size: .76rem; font-weight: 600; cursor: pointer; font-family: var(--font); transition: all .15s; }
+    .btn-reject:hover:not(:disabled)  { background: rgba(231,76,60,.17); }
+    .btn-reject:disabled  { opacity: .5; cursor: default; }
+    .crm-status { font-size: .68rem; color: var(--green); display: flex; align-items: center; gap: 4px; padding: 0 2px; }
 
-    /* ── Toast ────────────────────────────────────────────────────────── */
-    .toast { position: fixed; bottom: 24px; right: 24px; background: var(--navy-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 18px; font-size: .8rem; color: var(--white); box-shadow: var(--shadow); z-index: 300; display: none; align-items: center; gap: 10px; max-width: 340px; }
-    .toast.visible { display: flex; animation: slide-in .25s ease; }
-    .toast.error { border-color: var(--red); }
+    /* Toast */
+    .toast { position: fixed; bottom: 22px; right: 22px; background: var(--navy-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 16px; font-size: .78rem; color: var(--white); box-shadow: var(--shadow); z-index: 300; display: none; align-items: center; gap: 9px; max-width: 320px; }
+    .toast.visible { display: flex; animation: slide-in .22s ease; }
+    .toast.error   { border-color: var(--red); }
     .toast.success { border-color: var(--green); }
-    @keyframes slide-in { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform: translateY(0); } }
+    @keyframes slide-in { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
 
-    @media (max-width: 900px) {
+    @media (max-width: 960px) {
       .layout { grid-template-columns: 1fr; }
-      aside { border-right: none; border-bottom: 1px solid var(--border); }
+      aside { height: auto; position: static; }
       .metrics-strip { grid-template-columns: repeat(3, 1fr); }
       .leads-grid { grid-template-columns: 1fr; }
+      .header-center { display: none; }
     }
   </style>
 </head>
@@ -246,35 +306,39 @@
 <header>
   <div class="logo">
     <div class="logo-icon">🤖</div>
-    AI Lead Gen &nbsp;<span>/ HumanMaximizer</span>
+    AI Lead Gen <em>&nbsp;/ HumanMaximizer</em>
+  </div>
+  <div class="header-center">
+    <input type="text" class="header-search" id="search-box" placeholder="Search by company name…" oninput="renderLeads()" />
+    <button class="sort-btn" id="sort-btn" onclick="toggleSort()" title="Sort by score">↓ Score</button>
   </div>
   <div class="header-right">
     <span id="mode-badge" class="mode-badge mode-sync">SYNC MODE</span>
     <div class="header-status">
       <div class="dot" id="api-dot"></div>
       <span id="api-status-text">Checking…</span>
-      &nbsp;·&nbsp;
-      <span id="model-label" style="color:var(--teal);font-family:var(--mono);font-size:.75rem"></span>
+      <span style="opacity:.3">&nbsp;·&nbsp;</span>
+      <span id="model-label" style="color:var(--teal);font-family:var(--mono);font-size:.72rem"></span>
     </div>
   </div>
 </header>
 
 <div class="layout">
 
-  <!-- ── Sidebar ─────────────────────────────────────────────────────── -->
+  <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
   <aside>
 
-    <!-- Keyword -->
+    <!-- Keyword input -->
     <div>
       <div class="section-label">Target Market Keyword</div>
       <div class="input-group">
-        <textarea id="keyword" placeholder="e.g. manufacturing company India 500 employees">manufacturing company India 200 employees</textarea>
+        <textarea id="keyword" placeholder="e.g. logistics company India 500 employees">manufacturing company India 200 employees</textarea>
         <button class="btn btn-primary" id="run-btn" onclick="runPipeline()">▶ &nbsp;Generate Leads</button>
-        <button class="btn btn-secondary" id="ingest-btn" onclick="runIngest()">⟳ &nbsp;Re-ingest RAG Knowledge</button>
+        <button class="btn btn-secondary" id="ingest-btn" onclick="runIngest()">⟳ &nbsp;Rebuild RAG Knowledge Base</button>
       </div>
     </div>
 
-    <!-- ── Live Progress Panel (shown while async job is running) ─────── -->
+    <!-- Live progress panel -->
     <div class="progress-panel" id="progress-panel">
       <div class="progress-header">
         <div class="progress-title">
@@ -283,29 +347,35 @@
         </div>
         <div class="progress-elapsed" id="elapsed-display">0:00</div>
       </div>
-
       <div class="progress-bar-wrap">
         <div class="progress-bar-fill" id="progress-bar"></div>
       </div>
-
       <div class="stage-steps">
         <div class="stage-step wait" id="stage-research">
           <span class="step-icon" id="icon-research">○</span>
-          <span class="step-label">Research Agent</span>
+          <span class="step-label">
+            Research Agent
+            <div class="step-sub">Serper · LinkedIn · Tech Stack</div>
+          </span>
           <span class="step-time" id="time-research"></span>
         </div>
         <div class="stage-step wait" id="stage-qual">
           <span class="step-icon" id="icon-qual">○</span>
-          <span class="step-label">Qualification Agent</span>
+          <span class="step-label">
+            Qualification Agent
+            <div class="step-sub">Scoring · RAG grounding</div>
+          </span>
           <span class="step-time" id="time-qual"></span>
         </div>
         <div class="stage-step wait" id="stage-sales">
           <span class="step-icon" id="icon-sales">○</span>
-          <span class="step-label">Sales Agent + Slack</span>
+          <span class="step-label">
+            Sales Agent
+            <div class="step-sub">Email verify · 4-touch sequence</div>
+          </span>
           <span class="step-time" id="time-sales"></span>
         </div>
       </div>
-
       <div class="progress-counts">
         <div class="pcount">
           <div class="pcount-val" id="pc-found" style="color:var(--teal)">—</div>
@@ -317,10 +387,9 @@
         </div>
         <div class="pcount">
           <div class="pcount-val" id="pc-slack" style="color:var(--amber)">—</div>
-          <div class="pcount-label">Sent to Slack</div>
+          <div class="pcount-label">In Review</div>
         </div>
       </div>
-
       <div class="eta-row" id="eta-row">Estimating time…</div>
       <div class="progress-run-id" id="run-id-label"></div>
     </div>
@@ -329,35 +398,20 @@
     <div>
       <div class="section-label">Last Run Stats</div>
       <div class="pill-row">
-        <div class="status-pill">
-          <span class="pill-label">Total leads</span>
-          <span class="pill-val teal" id="stat-total">—</span>
-        </div>
-        <div class="status-pill">
-          <span class="pill-label">Outreach ready</span>
-          <span class="pill-val green" id="stat-qualified">—</span>
-        </div>
-        <div class="status-pill">
-          <span class="pill-label">Pending review</span>
-          <span class="pill-val amber" id="stat-pending">—</span>
-        </div>
-        <div class="status-pill">
-          <span class="pill-label">Disqualified</span>
-          <span class="pill-val red" id="stat-disq">—</span>
-        </div>
-        <div class="status-pill">
-          <span class="pill-label">Avg score</span>
-          <span class="pill-val amber" id="stat-avg">—</span>
-        </div>
-        <div class="status-pill">
-          <span class="pill-label">Redis</span>
-          <span class="pill-val" id="stat-redis">—</span>
-        </div>
+        <div class="status-pill"><span class="pill-label">Total leads</span><span class="pill-val teal" id="stat-total">—</span></div>
+        <div class="status-pill"><span class="pill-label">Outreach ready</span><span class="pill-val green" id="stat-qualified">—</span></div>
+        <div class="status-pill"><span class="pill-label">Pending review</span><span class="pill-val amber" id="stat-pending">—</span></div>
+        <div class="status-pill"><span class="pill-label">Disqualified</span><span class="pill-val red" id="stat-disq">—</span></div>
+        <div class="status-pill"><span class="pill-label">With contact info</span><span class="pill-val teal" id="stat-contact">—</span></div>
+        <div class="status-pill"><span class="pill-label">DM found (LinkedIn)</span><span class="pill-val purple" id="stat-dm">—</span></div>
+        <div class="status-pill"><span class="pill-label">Sequences generated</span><span class="pill-val green" id="stat-seq">—</span></div>
+        <div class="status-pill"><span class="pill-label">Avg score</span><span class="pill-val amber" id="stat-avg">—</span></div>
+        <div class="status-pill"><span class="pill-label">Redis</span><span class="pill-val" id="stat-redis">—</span></div>
       </div>
     </div>
 
     <!-- Pipeline log -->
-    <div style="flex:1">
+    <div style="flex:1;min-height:0">
       <div class="section-label">Pipeline Log</div>
       <div class="log-box" id="log-box">
         <span class="log-empty">No run yet. Click Generate Leads to start.</span>
@@ -365,15 +419,16 @@
     </div>
 
     <!-- Actions -->
-    <div style="display:flex;flex-direction:column;gap:8px;margin-top:auto">
+    <div style="display:flex;flex-direction:column;gap:6px;padding-top:4px">
       <button class="btn btn-danger" onclick="clearCache()">🗑 &nbsp;Flush Cache &amp; Dedup</button>
     </div>
 
   </aside>
 
-  <!-- ── Main ───────────────────────────────────────────────────────── -->
+  <!-- ── Main ─────────────────────────────────────────────────────────────── -->
   <main>
 
+    <!-- Metrics strip -->
     <div class="metrics-strip">
       <div class="metric-card">
         <div class="mc-val" id="m-total" style="color:var(--teal)">0</div>
@@ -388,8 +443,12 @@
         <div class="mc-label">Pending Review</div>
       </div>
       <div class="metric-card">
-        <div class="mc-val" id="m-disq" style="color:var(--red)">0</div>
-        <div class="mc-label">Disqualified</div>
+        <div class="mc-val" id="m-contact" style="color:var(--teal)">0</div>
+        <div class="mc-label">With Contact Info</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-val" id="m-dm" style="color:var(--purple)">0</div>
+        <div class="mc-label">DM Found</div>
       </div>
       <div class="metric-card">
         <div class="mc-val" id="m-latency" style="color:var(--amber)">—</div>
@@ -397,23 +456,18 @@
       </div>
     </div>
 
+    <!-- Filter + search bar -->
     <div class="filter-bar">
       <span class="filter-label">Filter:</span>
-      <button class="chip active" onclick="setFilter('all', this)">All</button>
-      <button class="chip" onclick="setFilter('outreach_ready', this)">Outreach Ready</button>
-      <button class="chip" onclick="setFilter('pending_review', this)">⏳ Pending Review</button>
-      <button class="chip" onclick="setFilter('disqualified', this)">Disqualified</button>
-      <button class="chip" onclick="setFilter('researched', this)">Researched</button>
-      <a href="/leads/export/csv" download="leads.csv"
-         style="margin-left:auto;padding:5px 14px;border-radius:20px;font-size:.78rem;font-weight:600;
-                border:1px solid rgba(0,180,166,.4);color:var(--teal);background:rgba(0,180,166,.08);
-                text-decoration:none;transition:all .15s"
-         onmouseover="this.style.background='rgba(0,180,166,.18)'"
-         onmouseout="this.style.background='rgba(0,180,166,.08)'">
-        ⬇ Export CSV
-      </a>
+      <button class="chip active" onclick="setFilter('all',this)">All <span class="chip-count" id="cnt-all"></span></button>
+      <button class="chip" onclick="setFilter('outreach_ready',this)">✉ Outreach Ready <span class="chip-count" id="cnt-ready"></span></button>
+      <button class="chip" onclick="setFilter('pending_review',this)">⏳ Pending <span class="chip-count" id="cnt-pending"></span></button>
+      <button class="chip" onclick="setFilter('disqualified',this)">✗ Disqualified <span class="chip-count" id="cnt-disq"></span></button>
+      <button class="chip" onclick="setFilter('researched',this)">○ Researched <span class="chip-count" id="cnt-res"></span></button>
+      <a class="export-btn" href="/leads/export/csv" download="leads.csv">⬇ Export CSV</a>
     </div>
 
+    <!-- Leads grid -->
     <div class="leads-grid" id="leads-grid">
       <div class="empty-state">
         <div class="es-icon">🎯</div>
@@ -426,61 +480,63 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- ── Scripts ─────────────────────────────────────────────────────────── -->
 <script>
 const API = '';
 let currentLeads = [];
 let activeFilter = 'all';
+let sortByScore  = true;  // default: highest score first
+const crmPushed  = new Set(); // track which lead IDs have been CRM-pushed this session
 
-// Async job tracking
-let activeRunId   = null;
-let pollInterval  = null;
-let elapsedTimer  = null;
-let runStartTime  = null;
-let stageTimings  = {};   // { research: startMs, qual: startMs, sales: startMs }
-let isCelery      = false;
+// Timing thresholds for stage inference (ms)
+const STAGE_RESEARCH_END = 60000;
+const STAGE_QUAL_END     = 140000;
+const TOTAL_ESTIMATE     = 210000;
 
-// Rough timing thresholds (ms) for stage inference from elapsed time
-const STAGE_RESEARCH_END = 45000;   // ~45s
-const STAGE_QUAL_END     = 130000;  // ~130s
-const TOTAL_ESTIMATE     = 180000;  // ~3 min
+let activeRunId  = null;
+let pollInterval = null;
+let elapsedTimer = null;
+let runStartTime = null;
+let stageTimings = {};
 
-/* ── Health check ────────────────────────────────────────────────────── */
+/* ─── Health check ────────────────────────────────────────────────────────── */
 async function checkHealth() {
   try {
-    const data = await fetch(`${API}/health`).then(r => r.json());
+    const d = await fetch(`${API}/health`).then(r => r.json());
     document.getElementById('api-dot').className = 'dot green';
     document.getElementById('api-status-text').textContent = 'API Online';
-    const redis = data.dependencies?.redis || '';
-    document.getElementById('stat-redis').textContent = redis.includes('connected') ? 'connected' : 'degraded';
-    document.getElementById('stat-redis').className = 'pill-val ' + (redis.includes('connected') ? 'green' : 'amber');
-    document.getElementById('model-label').textContent = data.dependencies?.groq_model || '';
+    const redis = d.dependencies?.redis || '';
+    const redisOk = redis.includes('connected');
+    document.getElementById('stat-redis').textContent = redisOk ? 'connected' : 'degraded';
+    document.getElementById('stat-redis').className = 'pill-val ' + (redisOk ? 'green' : 'amber');
+    document.getElementById('model-label').textContent = d.dependencies?.groq_model || '';
   } catch {
     document.getElementById('api-dot').className = 'dot red';
     document.getElementById('api-status-text').textContent = 'API Offline';
   }
 }
 
-/* ── Ingest ──────────────────────────────────────────────────────────── */
+/* ─── Ingest ──────────────────────────────────────────────────────────────── */
 async function runIngest() {
   const btn = document.getElementById('ingest-btn');
   btn.disabled = true; btn.textContent = '⟳  Ingesting…';
   try {
-    const data = await fetch(`${API}/ingest-knowledge`, { method: 'POST' }).then(r => r.json());
-    showToast(data.status === 'skipped'
+    const d = await fetch(`${API}/ingest-knowledge`, { method: 'POST' }).then(r => r.json());
+    showToast(d.status === 'skipped'
       ? '✓ Knowledge base already built'
-      : `✓ Ingested ${data.pages_scraped} pages, ${data.chunks_stored} chunks`, 'success');
+      : `✓ Ingested ${d.pages_scraped} pages, ${d.chunks_stored} chunks`, 'success');
+    appendLog('› ' + (d.message || `Ingested ${d.chunks_stored} chunks`));
   } catch(e) {
     showToast('Ingest failed: ' + e.message, 'error');
+    appendLog('❌ Ingest failed: ' + e.message, 'err');
   } finally {
-    btn.disabled = false; btn.textContent = '⟳  Re-ingest RAG Knowledge';
+    btn.disabled = false; btn.textContent = '⟳  Rebuild RAG Knowledge Base';
   }
 }
 
-/* ── Generate leads ──────────────────────────────────────────────────── */
+/* ─── Run pipeline ────────────────────────────────────────────────────────── */
 async function runPipeline() {
   const keyword = document.getElementById('keyword').value.trim();
-  if (!keyword) { showToast('Please enter a keyword', 'error'); return; }
+  if (!keyword) { showToast('Enter a keyword first', 'error'); return; }
 
   setControlsDisabled(true);
   resetProgress();
@@ -490,150 +546,106 @@ async function runPipeline() {
     const res = await fetch(`${API}/generate-leads`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keyword })
+      body: JSON.stringify({ keyword }),
     });
     const data = await res.json();
-
     if (!res.ok) throw new Error(data.detail || 'Pipeline error');
 
     if (data.status === 'queued') {
-      // ── Async (Celery) mode ──
-      isCelery = true;
-      activeRunId = data.run_id;
       document.getElementById('mode-badge').className = 'mode-badge mode-async';
       document.getElementById('mode-badge').textContent = 'ASYNC / CELERY';
       showProgressPanel(data.run_id);
       startElapsedTimer();
       startPolling(data.run_id);
-      appendLog(`› Job queued — run_id: ${data.run_id}`);
-      appendLog('› Polling every 3 seconds for updates…');
+      appendLog(`› Queued — run_id: ${data.run_id}`);
+      appendLog('› Polling every 3s…');
     } else {
-      // ── Sync (fallback) mode ──
-      isCelery = false;
       document.getElementById('mode-badge').className = 'mode-badge mode-sync';
       document.getElementById('mode-badge').textContent = 'SYNC MODE';
       handleResults(data, Date.now() - runStartTime);
       setControlsDisabled(false);
     }
-
   } catch(e) {
     showToast('Error: ' + e.message, 'error');
-    appendLog('❌ ' + e.message, true);
+    appendLog('❌ ' + e.message, 'err');
     setControlsDisabled(false);
     hideProgressPanel();
   }
 }
 
-/* ── Polling loop ────────────────────────────────────────────────────── */
+/* ─── Polling ─────────────────────────────────────────────────────────────── */
 function startPolling(runId) {
   pollInterval = setInterval(async () => {
     try {
       const s = await fetch(`${API}/pipeline-status/${runId}`).then(r => r.json());
       updateStageFromElapsed();
-
       if (s.status === 'SUCCESS') {
-        stopPolling();
-        markPipelineDone();
+        stopPolling(); markPipelineDone();
         const elapsed = Date.now() - runStartTime;
         handleResults(s.result, elapsed);
         setControlsDisabled(false);
-        showToast(`✓ Pipeline complete in ${fmtMs(elapsed)}`, 'success');
+        showToast(`✓ Done in ${fmtMs(elapsed)}`, 'success');
       } else if (s.status === 'FAILURE') {
-        stopPolling();
-        markPipelineError();
+        stopPolling(); markPipelineError();
         setControlsDisabled(false);
-        appendLog('❌ Pipeline failed: ' + (s.error || 'Unknown error'), true);
+        appendLog('❌ Pipeline failed: ' + (s.error || 'Unknown'), 'err');
         showToast('Pipeline failed', 'error');
       }
-      // PENDING / STARTED — keep polling
-    } catch(e) {
-      appendLog('⚠ Poll error: ' + e.message, true);
-    }
+    } catch(e) { appendLog('⚠ Poll error: ' + e.message, 'warn'); }
   }, 3000);
 }
 
 function stopPolling() {
-  if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
-  if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+  clearInterval(pollInterval); pollInterval = null;
+  clearInterval(elapsedTimer); elapsedTimer = null;
 }
 
-/* ── Elapsed timer ───────────────────────────────────────────────────── */
 function startElapsedTimer() {
   if (elapsedTimer) clearInterval(elapsedTimer);
   elapsedTimer = setInterval(() => {
-    const elapsed = Date.now() - runStartTime;
-    document.getElementById('elapsed-display').textContent = fmtMs(elapsed);
+    const e = Date.now() - runStartTime;
+    document.getElementById('elapsed-display').textContent = fmtMs(e);
     updateStageFromElapsed();
-    updateProgressBar(elapsed);
-    updateETA(elapsed);
+    document.getElementById('progress-bar').style.width = Math.min(94, e / TOTAL_ESTIMATE * 100) + '%';
+    const rem = Math.max(0, TOTAL_ESTIMATE - e);
+    document.getElementById('eta-row').innerHTML = rem > 0
+      ? `Est. <span>~${fmtMs(rem)}</span> remaining` : 'Almost done…';
   }, 500);
 }
 
-/* ── Stage inference from elapsed time ───────────────────────────────── */
 function updateStageFromElapsed() {
-  const elapsed = Date.now() - runStartTime;
-
-  if (elapsed < STAGE_RESEARCH_END) {
-    setStage('research', 'active');
-    setStage('qual', 'wait');
-    setStage('sales', 'wait');
+  const e = Date.now() - runStartTime;
+  if (e < STAGE_RESEARCH_END) {
+    setStage('research','active'); setStage('qual','wait'); setStage('sales','wait');
     if (!stageTimings.research) stageTimings.research = runStartTime;
-  } else if (elapsed < STAGE_QUAL_END) {
-    setStage('research', 'done');
-    setStage('qual', 'active');
-    setStage('sales', 'wait');
+  } else if (e < STAGE_QUAL_END) {
+    setStage('research','done'); setStage('qual','active'); setStage('sales','wait');
     if (!stageTimings.qual) {
       stageTimings.qual = Date.now();
       document.getElementById('time-research').textContent = fmtMs(stageTimings.qual - stageTimings.research);
     }
   } else {
-    setStage('research', 'done');
-    setStage('qual', 'done');
-    setStage('sales', 'active');
+    setStage('research','done'); setStage('qual','done'); setStage('sales','active');
     if (!stageTimings.sales) {
       stageTimings.sales = Date.now();
-      if (stageTimings.qual) {
-        document.getElementById('time-qual').textContent = fmtMs(stageTimings.sales - stageTimings.qual);
-      }
+      if (stageTimings.qual) document.getElementById('time-qual').textContent = fmtMs(stageTimings.sales - stageTimings.qual);
     }
   }
 }
 
 function setStage(name, state) {
-  const el = document.getElementById('stage-' + name);
+  document.getElementById('stage-' + name).className = 'stage-step ' + state;
   const icon = document.getElementById('icon-' + name);
-  el.className = 'stage-step ' + state;
-  if (state === 'active') icon.textContent = '⟳';
-  else if (state === 'done') icon.textContent = '✓';
-  else icon.textContent = '○';
+  icon.textContent = state === 'active' ? '⟳' : state === 'done' ? '✓' : '○';
 }
 
-function updateProgressBar(elapsed) {
-  const pct = Math.min(95, (elapsed / TOTAL_ESTIMATE) * 100);
-  document.getElementById('progress-bar').style.width = pct + '%';
-}
-
-function updateETA(elapsed) {
-  const remaining = Math.max(0, TOTAL_ESTIMATE - elapsed);
-  const etaEl = document.getElementById('eta-row');
-  if (remaining > 0) {
-    etaEl.innerHTML = `Est. <span>~${fmtMs(remaining)}</span> remaining`;
-  } else {
-    etaEl.innerHTML = 'Almost done…';
-  }
-}
-
-/* ── Done / error states ─────────────────────────────────────────────── */
 function markPipelineDone() {
   stopPolling();
   document.getElementById('pulse').className = 'pulse-ring done';
   document.getElementById('progress-status-text').textContent = 'Pipeline Complete ✓';
-  document.getElementById('progress-bar').style.width = '100%';
-  document.getElementById('progress-bar').style.background = 'var(--green)';
+  document.getElementById('progress-bar').style.cssText = 'width:100%;background:var(--green)';
   document.getElementById('eta-row').innerHTML = '<span style="color:var(--green)">Done!</span>';
-  setStage('research', 'done');
-  setStage('qual', 'done');
-  setStage('sales', 'done');
+  ['research','qual','sales'].forEach(s => setStage(s,'done'));
 }
 
 function markPipelineError() {
@@ -642,147 +654,172 @@ function markPipelineError() {
   document.getElementById('eta-row').innerHTML = '<span style="color:var(--red)">Failed</span>';
 }
 
-/* ── Handle results (works for both sync & async) ────────────────────── */
+/* ─── Results handler ─────────────────────────────────────────────────────── */
 function handleResults(data, elapsed) {
   currentLeads = data.leads || [];
-
-  // update counts in progress panel
-  const found = currentLeads.length;
-  const qual  = currentLeads.filter(l => l.status === 'outreach_ready' || l.status === 'pending_review').length;
-  const slack = currentLeads.filter(l => l.status === 'pending_review').length;
-  document.getElementById('pc-found').textContent  = found;
-  document.getElementById('pc-qual').textContent   = qual;
-  document.getElementById('pc-slack').textContent  = slack;
-
+  const found   = currentLeads.length;
+  const qual    = currentLeads.filter(l => ['outreach_ready','pending_review'].includes(l.status)).length;
+  const slack   = currentLeads.filter(l => l.status === 'pending_review').length;
+  document.getElementById('pc-found').textContent = found;
+  document.getElementById('pc-qual').textContent  = qual;
+  document.getElementById('pc-slack').textContent = slack;
   renderStats();
-  renderLog(data.pipeline_log || [`Pipeline complete — ${found} leads processed`]);
+  renderLog(data.pipeline_log || [`Pipeline complete — ${found} leads`]);
   renderLeads();
   if (elapsed) document.getElementById('m-latency').textContent = fmtMs(elapsed);
 }
 
-/* ── Progress panel helpers ──────────────────────────────────────────── */
+/* ─── Progress panel helpers ──────────────────────────────────────────────── */
 function showProgressPanel(runId) {
   document.getElementById('progress-panel').classList.add('visible');
   document.getElementById('run-id-label').textContent = 'run_id: ' + runId;
   document.getElementById('progress-status-text').textContent = 'Pipeline Running';
 }
-function hideProgressPanel() {
-  document.getElementById('progress-panel').classList.remove('visible');
-}
+function hideProgressPanel() { document.getElementById('progress-panel').classList.remove('visible'); }
 function resetProgress() {
   stageTimings = {};
-  ['research','qual','sales'].forEach(s => setStage(s, 'wait'));
-  document.getElementById('progress-bar').style.width = '0%';
-  document.getElementById('progress-bar').style.background = 'linear-gradient(90deg, var(--teal), var(--blue))';
+  ['research','qual','sales'].forEach(s => setStage(s,'wait'));
+  document.getElementById('progress-bar').style.cssText = 'width:0%;background:linear-gradient(90deg,var(--teal),var(--blue))';
   document.getElementById('pulse').className = 'pulse-ring';
   document.getElementById('elapsed-display').textContent = '0:00';
   document.getElementById('eta-row').textContent = 'Estimating time…';
   document.getElementById('pc-found').textContent = '—';
-  document.getElementById('pc-qual').textContent = '—';
+  document.getElementById('pc-qual').textContent  = '—';
   document.getElementById('pc-slack').textContent = '—';
-  ['time-research','time-qual','time-sales'].forEach(id => { document.getElementById(id).textContent = ''; });
+  ['time-research','time-qual','time-sales'].forEach(id => { const el = document.getElementById(id); if(el) el.textContent = ''; });
+  showProgressPanel('—');
 }
 
-/* ── Flush cache ─────────────────────────────────────────────────────── */
+/* ─── Cache flush ─────────────────────────────────────────────────────────── */
 async function clearCache() {
   try {
-    const data = await fetch(`${API}/flush-cache`, { method: 'POST' }).then(r => r.json());
-    showToast('✓ ' + (data.message || 'Cache flushed'), 'success');
+    const d = await fetch(`${API}/flush-cache`, { method: 'POST' }).then(r => r.json());
+    showToast('✓ ' + (d.message || 'Cache flushed'), 'success');
     appendLog('› Redis flushed — next run starts fresh');
+  } catch(e) { showToast('Flush failed: ' + e.message, 'error'); }
+}
+
+/* ─── Approve / Reject ────────────────────────────────────────────────────── */
+async function approveLead(id, approveBtn, rejectBtn) {
+  approveBtn.disabled = true; rejectBtn.disabled = true; approveBtn.textContent = '…';
+  try {
+    await fetch(`${API}/leads/${id}/approve`, { method: 'POST' });
+    const lead = currentLeads.find(l => l.id === id);
+    if (lead) lead.status = 'outreach_ready';
+    crmPushed.add(id);
+    renderLeads(); renderStats();
+    showToast('✓ Lead approved & pushed to CRM', 'success');
+    appendLog(`› Lead ${id} approved → outreach_ready → CRM push triggered`);
   } catch(e) {
-    showToast('Flush failed: ' + e.message, 'error');
+    showToast('Approve failed: ' + e.message, 'error');
+    approveBtn.disabled = false; rejectBtn.disabled = false; approveBtn.textContent = '✓ Approve';
   }
 }
 
-/* ── Approve / Reject from dashboard ────────────────────────────────── */
-async function approveLead(id, btn) {
-  btn.disabled = true; btn.textContent = '…';
-  try {
-    const data = await fetch(`${API}/leads/${id}/approve`, { method: 'POST' }).then(r => r.json());
-    // update in memory
-    const lead = currentLeads.find(l => l.id === id);
-    if (lead) lead.status = 'outreach_ready';
-    renderLeads();
-    renderStats();
-    showToast('✓ Lead approved', 'success');
-  } catch(e) { showToast('Approve failed', 'error'); btn.disabled = false; btn.textContent = '✓ Approve'; }
-}
-
-async function rejectLead(id, btn) {
-  btn.disabled = true; btn.textContent = '…';
+async function rejectLead(id, approveBtn, rejectBtn) {
+  approveBtn.disabled = true; rejectBtn.disabled = true; rejectBtn.textContent = '…';
   try {
     await fetch(`${API}/leads/${id}/reject`, { method: 'POST' });
     const lead = currentLeads.find(l => l.id === id);
     if (lead) lead.status = 'disqualified';
-    renderLeads();
-    renderStats();
+    renderLeads(); renderStats();
     showToast('Lead rejected', 'success');
-  } catch(e) { showToast('Reject failed', 'error'); btn.disabled = false; btn.textContent = '✗ Reject'; }
+  } catch(e) {
+    showToast('Reject failed: ' + e.message, 'error');
+    approveBtn.disabled = false; rejectBtn.disabled = false; rejectBtn.textContent = '✗ Reject';
+  }
 }
 
-/* ── Render helpers ──────────────────────────────────────────────────── */
+/* ─── Render stats ────────────────────────────────────────────────────────── */
 function renderStats() {
   const total   = currentLeads.length;
   const ready   = currentLeads.filter(l => l.status === 'outreach_ready').length;
   const pending = currentLeads.filter(l => l.status === 'pending_review').length;
   const disq    = currentLeads.filter(l => l.status === 'disqualified').length;
+  const contact = currentLeads.filter(l => (l.contact_emails||[]).length > 0 || l.phone).length;
+  const dm      = currentLeads.filter(l => l.decision_maker_name).length;
+  const seq     = currentLeads.filter(l => l.follow_up_sequence?.length > 0).length;
   const scores  = currentLeads.map(l => l.qualification_score).filter(s => s != null);
   const avg     = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
 
-  document.getElementById('stat-total').textContent     = total;
-  document.getElementById('stat-qualified').textContent = ready;
-  document.getElementById('stat-pending').textContent   = pending;
-  document.getElementById('stat-disq').textContent      = disq;
-  document.getElementById('stat-avg').textContent       = avg !== '—' ? avg + '/10' : '—';
+  document.getElementById('stat-total').textContent    = total;
+  document.getElementById('stat-qualified').textContent= ready;
+  document.getElementById('stat-pending').textContent  = pending;
+  document.getElementById('stat-disq').textContent     = disq;
+  document.getElementById('stat-contact').textContent  = contact;
+  document.getElementById('stat-dm').textContent       = dm;
+  document.getElementById('stat-seq').textContent      = seq;
+  document.getElementById('stat-avg').textContent      = avg !== '—' ? avg + '/10' : '—';
+
   document.getElementById('m-total').textContent   = total;
   document.getElementById('m-qual').textContent    = ready;
   document.getElementById('m-pending').textContent = pending;
-  document.getElementById('m-disq').textContent    = disq;
+  document.getElementById('m-contact').textContent = contact;
+  document.getElementById('m-dm').textContent      = dm;
+
+  // Filter chip counts
+  document.getElementById('cnt-all').textContent     = total || '';
+  document.getElementById('cnt-ready').textContent   = ready || '';
+  document.getElementById('cnt-pending').textContent = pending || '';
+  document.getElementById('cnt-disq').textContent    = disq || '';
+  document.getElementById('cnt-res').textContent     = currentLeads.filter(l=>l.status==='researched').length || '';
 }
 
+/* ─── Log helpers ─────────────────────────────────────────────────────────── */
 function renderLog(lines) {
   const box = document.getElementById('log-box');
-  if (!lines || !lines.length) { box.innerHTML = '<span class="log-empty">No log output.</span>'; return; }
+  if (!lines?.length) { box.innerHTML = '<span class="log-empty">No log output.</span>'; return; }
   box.innerHTML = lines.map(l => `<div class="log-line">› ${escHtml(l)}</div>`).join('');
   box.scrollTop = box.scrollHeight;
 }
-
-function appendLog(line, isErr=false) {
+function appendLog(line, type='') {
   const box = document.getElementById('log-box');
   const empty = box.querySelector('.log-empty');
   if (empty) empty.remove();
   const div = document.createElement('div');
-  div.className = isErr ? 'log-err' : 'log-line';
+  div.className = type === 'err' ? 'log-err' : type === 'warn' ? 'log-warn' : 'log-line';
   div.textContent = line;
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
 }
 
+/* ─── Filter + sort ───────────────────────────────────────────────────────── */
 function setFilter(f, el) {
   activeFilter = f;
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   renderLeads();
 }
+function toggleSort() {
+  sortByScore = !sortByScore;
+  document.getElementById('sort-btn').textContent = sortByScore ? '↓ Score' : '↑ Score';
+  document.getElementById('sort-btn').classList.toggle('active', sortByScore);
+  renderLeads();
+}
 
+/* ─── Render leads ────────────────────────────────────────────────────────── */
 function renderLeads() {
-  const grid = document.getElementById('leads-grid');
-  let leads = currentLeads;
+  const grid  = document.getElementById('leads-grid');
+  const query = (document.getElementById('search-box')?.value || '').toLowerCase().trim();
+
+  let leads = [...currentLeads];
   if (activeFilter !== 'all') leads = leads.filter(l => l.status === activeFilter);
+  if (query) leads = leads.filter(l => (l.company_name||'').toLowerCase().includes(query) || (l.industry||'').toLowerCase().includes(query));
+  if (sortByScore) leads.sort((a,b) => (b.qualification_score||0) - (a.qualification_score||0));
 
   if (!leads.length) {
-    grid.innerHTML = `<div class="empty-state">
-      <div class="es-icon">🔍</div>
-      <p>${currentLeads.length ? 'No leads match this filter.' : 'No leads yet.<br>Click <strong>Generate Leads</strong> to start.'}</p>
-    </div>`;
+    grid.innerHTML = `<div class="empty-state"><div class="es-icon">${currentLeads.length ? '🔍' : '🎯'}</div><p>${currentLeads.length ? 'No leads match this filter or search.' : 'No leads yet.<br>Enter a keyword and click <strong>Generate Leads</strong>.'}</p></div>`;
     return;
   }
   grid.innerHTML = leads.map((lead, i) => buildCard(lead, i)).join('');
 }
 
+/* ─── Build card ──────────────────────────────────────────────────────────── */
 function buildCard(lead, idx) {
-  const score = lead.qualification_score;
+  const score      = lead.qualification_score;
   const scoreClass = score == null ? '' : score >= 7 ? 'badge-score-high' : score >= 4 ? 'badge-score-mid' : 'badge-score-low';
+  const scoreBarColor = score == null ? 'var(--muted)' : score >= 7 ? 'var(--green)' : score >= 4 ? 'var(--amber)' : 'var(--red)';
+  const scorePct   = score != null ? Math.round(score * 10) : 0;
 
   const statusBadge = {
     outreach_ready: '<span class="badge badge-outreach">✉ Outreach Ready</span>',
@@ -792,152 +829,194 @@ function buildCard(lead, idx) {
     researched:     '<span class="badge badge-researched">○ Researched</span>',
   }[lead.status] || '';
 
-  const painTags = (lead.pain_points || []).slice(0,4)
-    .map(p => `<span class="pain-tag">${escHtml(p)}</span>`).join('');
+  const wasCrmPushed = crmPushed.has(lead.id);
+  const crmBadge = wasCrmPushed ? '<span class="badge badge-crm">→ CRM ✓</span>' : '';
 
+  /* ── Website + tech stack ── */
+  const website = lead.website
+    ? `<a href="${escAttr(lead.website)}" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none;font-size:.72rem">${escHtml(lead.website.replace(/https?:\/\//,''))}</a>`
+    : '';
+  const tech  = lead.tech_stack || {};
+  const tools = tech.current_tools || [];
+  const maturityClass = { legacy:'tech-legacy', modern:'tech-modern', manual:'tech-manual', unknown:'tech-unknown' }[tech.maturity] || 'tech-unknown';
+  const techBadge = tech.maturity
+    ? `<span class="tech-badge ${maturityClass}">${tools.length ? tools.slice(0,2).join(', ') : tech.maturity}</span>`
+    : '';
+
+  /* ── Decision maker ── */
+  const dmName     = lead.decision_maker_full_name || lead.decision_maker_name || '';
+  const dmTitle    = lead.decision_maker_title || '';
+  const dmLinkedin = lead.decision_maker_linkedin || '';
+  const dmInitials = dmName ? dmName.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase() : '';
+  const dmBlock = dmName ? `
+    <div class="card-section">
+      <div class="card-section-label">Decision Maker</div>
+      <div class="dm-row">
+        <div class="dm-avatar">${escHtml(dmInitials)}</div>
+        <div class="dm-info">
+          <div class="dm-name">${escHtml(dmName)}</div>
+          ${dmTitle ? `<div class="dm-title">${escHtml(dmTitle)}</div>` : ''}
+        </div>
+        ${dmLinkedin ? `<a class="dm-linkedin" href="${escAttr(dmLinkedin)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}
+      </div>
+    </div>` : '';
+
+  /* ── Contact info with email quality indicators ── */
+  const verified   = lead.verified_emails || [];
+  const qualityMap = {};
+  verified.forEach(v => { qualityMap[v.email] = v.quality; });
+
+  const emails = (lead.contact_emails || []).filter(Boolean);
+  const emailChips = emails.map(e => {
+    const q = qualityMap[e] || 'medium';
+    const qIcon = q === 'high' ? '✓' : q === 'medium' ? '~' : '–';
+    const qClass = `q-${q}`;
+    return `<span class="email-chip"><a href="mailto:${escAttr(e)}">${escHtml(e)}</a><span class="${qClass}" title="Quality: ${q}">${qIcon}</span></span>`;
+  }).join('');
+
+  const phoneHtml = lead.phone
+    ? `<div class="contact-item"><span class="contact-icon">📞</span><a href="tel:${escAttr(lead.phone)}" style="color:var(--teal);text-decoration:none;font-size:.74rem">${escHtml(lead.phone)}</a></div>`
+    : '';
+  const addressHtml = lead.address
+    ? `<div class="contact-item"><span class="contact-icon">🏢</span><span style="color:#B0C4D8;font-size:.73rem">${escHtml(lead.address)}</span></div>`
+    : '';
+
+  const hasContact = emailChips || phoneHtml || addressHtml;
+  const contactBlock = hasContact ? `
+    <div class="card-section">
+      <div class="card-section-label">Contact Info ${verified.length ? `<span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(✓ = verified MX · ~ = unverified)</span>` : ''}</div>
+      <div class="contact-row">
+        ${emailChips ? `<div class="contact-item"><span class="contact-icon">✉</span><div class="contact-emails-wrap">${emailChips}</div></div>` : ''}
+        ${phoneHtml}
+        ${addressHtml}
+      </div>
+    </div>` : '';
+
+  /* ── Tech stack + pitch angle ── */
+  const techBlock = tech.maturity ? `
+    <div class="card-section">
+      <div class="card-section-label">Current HR Stack</div>
+      <div class="tech-row">
+        <span class="tech-badge ${maturityClass}">${tech.maturity.toUpperCase()}</span>
+        ${tools.length ? `<span style="font-size:.72rem;color:var(--muted)">${escHtml(tools.join(' · '))}</span>` : ''}
+      </div>
+      ${tech.pitch_angle ? `<div class="pitch-text">💡 ${escHtml(tech.pitch_angle)}</div>` : ''}
+    </div>` : '';
+
+  /* ── Pain points ── */
+  const painTags = (lead.pain_points || []).slice(0,5).map(p => `<span class="pain-tag">${escHtml(p)}</span>`).join('');
+  const painBlock = painTags ? `
+    <div class="card-section">
+      <div class="card-section-label">Pain Points</div>
+      <div class="pain-points">${painTags}</div>
+    </div>` : '';
+
+  /* ── Score bar ── */
+  const scoreBarHtml = score != null ? `
+    <div class="score-bar-wrap">
+      <span style="font-size:.68rem;color:var(--muted)">Score</span>
+      <div class="score-bar-bg"><div class="score-bar-fill" style="width:${scorePct}%;background:${scoreBarColor}"></div></div>
+      <span style="font-size:.72rem;font-family:var(--mono);font-weight:600;color:${scoreBarColor}">${score}/10</span>
+    </div>` : '';
+
+  /* ── Qualification reason ── */
+  const qualReason = lead.qualification_reason && !lead.summary
+    ? `<div style="font-size:.73rem;color:var(--muted);line-height:1.55;border-left:2px solid var(--teal-dim);padding-left:9px">${escHtml(lead.qualification_reason)}</div>`
+    : '';
   const summaryBlock = lead.summary
     ? `<div class="lead-summary">${escHtml(lead.summary)}</div>` : '';
 
-  const qualReason = lead.qualification_reason && !lead.summary
-    ? `<div class="qual-reason">${escHtml(lead.qualification_reason)}</div>` : '';
-
-  // Tech stack badge
-  const techStack = lead.tech_stack || {};
-  const currentTools = techStack.current_tools || [];
-  const maturityColors = { legacy: 'var(--amber)', modern: 'var(--blue)', manual: 'var(--red)', unknown: 'var(--muted)' };
-  const techBadge = techStack.maturity && techStack.maturity !== 'unknown'
-    ? `<span style="font-size:.65rem;padding:2px 7px;border-radius:4px;border:1px solid var(--border);color:${maturityColors[techStack.maturity]||'var(--muted)'}">
-        ${currentTools.length ? currentTools.join(', ') : techStack.maturity} stack
-       </span>` : '';
-
-  // LinkedIn DM info
-  const dmName = lead.decision_maker_full_name || lead.decision_maker_name || '';
-  const dmTitle = lead.decision_maker_title || '';
-  const dmLinkedin = lead.decision_maker_linkedin || '';
-  const dmBlock = dmName ? `
-    <div style="font-size:.68rem;color:var(--muted);margin-bottom:4px">DECISION MAKER</div>
-    <div style="font-size:.76rem;display:flex;align-items:center;gap:8px">
-      <span>👤 <strong>${escHtml(dmName)}</strong>${dmTitle ? ' · ' + escHtml(dmTitle) : ''}</span>
-      ${dmLinkedin ? `<a href="${escHtml(dmLinkedin)}" target="_blank" rel="noopener"
-          style="color:var(--blue);font-size:.68rem;text-decoration:none">LinkedIn ↗</a>` : ''}
-    </div>` : '';
-
-  // Pitch angle from tech stack
-  const pitchAngle = techStack.pitch_angle
-    ? `<div style="font-size:.72rem;color:var(--amber);border-left:2px solid var(--amber);padding-left:8px;margin-top:4px;line-height:1.5">
-        💡 ${escHtml(techStack.pitch_angle)}
-       </div>` : '';
-
-  // Email sequence tabs
+  /* ── Email sequence ── */
   let emailSection = '';
   if (lead.outreach_draft?.email_body) {
-    const d = lead.outreach_draft;
+    const d   = lead.outreach_draft;
     const seq = lead.follow_up_sequence || [];
-    const allEmails = [
-      { label: 'Day 1 — Cold Intro', subject: d.subject, body: d.email_body },
-      ...seq.map(s => ({ label: `Day ${s.day} — Follow-up`, subject: s.subject, body: s.email_body }))
+    const all = [
+      { label: 'Day 1', sublabel: 'Cold Intro', subject: d.subject, body: d.email_body },
+      ...seq.map(s => ({
+        label: `Day ${s.day}`,
+        sublabel: s.day === 3 ? 'Follow-up' : s.day === 7 ? 'Value Email' : 'Break-up',
+        subject: s.subject, body: s.email_body,
+      })),
     ];
-    const tabsHtml = allEmails.map((e, i) => `
-      <button class="seq-tab${i===0?' active':''}" onclick="switchTab(this,'seq-${idx}',${i})"
-        style="padding:4px 10px;font-size:.7rem;border:1px solid var(--border);border-radius:4px;
-               background:${i===0?'var(--teal)':'var(--navy-lite)'};
-               color:${i===0?'var(--navy)':'var(--muted)'};cursor:pointer;font-family:var(--font)">
-        ${e.label}
-      </button>`).join('');
-    const panelsHtml = allEmails.map((e, i) => `
-      <div class="seq-panel" id="seq-${idx}-${i}" style="display:${i===0?'flex':'none'};flex-direction:column;gap:8px">
-        <div class="email-subject"><span>Subject: </span>${escHtml(e.subject || '')}</div>
-        <div class="email-text">${escHtml(e.body || '')}</div>
-        <button class="copy-btn" onclick="copyText(this, ${JSON.stringify(e.body||'')})">Copy</button>
+    const tabs = all.map((e,i) => `<button class="seq-tab${i===0?' active':''}" onclick="switchTab(this,'seq-${idx}',${i})">${escHtml(e.label)}<span style="opacity:.6;font-size:.6rem;margin-left:3px">${escHtml(e.sublabel)}</span></button>`).join('');
+    const panels = all.map((e,i) => `
+      <div class="seq-panel" id="seq-${idx}-${i}" style="display:${i===0?'flex':'none'}">
+        <div class="email-subject"><span>Subject: </span>${escHtml(e.subject||'')}</div>
+        <div class="email-text">${escHtml(e.body||'')}</div>
+        <button class="copy-btn" onclick="copyText(this,${JSON.stringify(e.body||'')})">Copy</button>
       </div>`).join('');
     emailSection = `
       <div class="email-section">
-        <button class="email-toggle" onclick="toggleEmail(this,'${idx}')">
-          <span class="arrow">▶</span> View ${allEmails.length}-Touch Outreach Sequence
+        <button class="email-toggle" id="etoggle-${idx}" onclick="toggleEmail(${idx})">
+          ▶ &nbsp;${all.length}-Touch Outreach Sequence
         </button>
         <div class="email-body" id="email-${idx}">
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tabsHtml}</div>
-          <div id="seq-${idx}">${panelsHtml}</div>
+          <div class="seq-tabs">${tabs}</div>
+          <div id="seq-${idx}">${panels}</div>
         </div>
       </div>`;
   }
 
+  /* ── Review actions ── */
   let reviewActions = '';
   if (lead.status === 'pending_review' && lead.id) {
     reviewActions = `
       <div class="review-actions">
-        <button class="btn-approve" onclick="approveLead('${lead.id}',this)">✓ Approve</button>
-        <button class="btn-reject"  onclick="rejectLead('${lead.id}',this)">✗ Reject</button>
+        <button class="btn-approve" id="abtn-${lead.id}" onclick="approveLead('${lead.id}',this,document.getElementById('rbtn-${lead.id}'))">✓ Approve → CRM</button>
+        <button class="btn-reject"  id="rbtn-${lead.id}" onclick="rejectLead('${lead.id}',document.getElementById('abtn-${lead.id}'),this)">✗ Reject</button>
       </div>`;
+  } else if (wasCrmPushed) {
+    reviewActions = `<div style="padding:8px 14px;border-top:1px solid var(--border)"><span class="crm-status">✓ Pushed to CRM</span></div>`;
   }
 
-  const website = lead.website
-    ? `<a href="${escHtml(lead.website)}" target="_blank" rel="noopener"
-         style="color:var(--teal);text-decoration:none;font-size:.75rem">${escHtml(lead.website.replace(/https?:\/\//,''))}</a>` : '';
-
-  // Contact info block
-  const emails = (lead.contact_emails || []).filter(Boolean);
-  const emailsHtml = emails.length
-    ? emails.map(e => `<a href="mailto:${escHtml(e)}" style="color:var(--teal);text-decoration:none">${escHtml(e)}</a>`).join(', ')
-    : '';
-  const phoneHtml = lead.phone
-    ? `<a href="tel:${escHtml(lead.phone)}" style="color:var(--teal);text-decoration:none">${escHtml(lead.phone)}</a>`
-    : '';
-  const hasContact = emailsHtml || phoneHtml || lead.address;
-  const contactBlock = hasContact ? `
-    <div style="font-size:.68rem;color:var(--muted);margin-bottom:4px">CONTACT INFO</div>
-    <div style="display:flex;flex-direction:column;gap:3px;font-size:.76rem">
-      ${emailsHtml ? `<div>✉ ${emailsHtml}</div>` : ''}
-      ${phoneHtml  ? `<div>📞 ${phoneHtml}</div>` : ''}
-      ${lead.address ? `<div style="color:#B0C4D8">🏢 ${escHtml(lead.address)}</div>` : ''}
-    </div>` : '';
-
   return `
-    <div class="lead-card">
+    <div class="lead-card${wasCrmPushed?' crm-pushed':''}">
       <div class="card-header">
-        <div>
-          <div class="card-company">${escHtml(lead.company_name || 'Unknown')}</div>
+        <div style="min-width:0;flex:1">
+          <div class="card-company">${escHtml(lead.company_name||'Unknown')}</div>
           <div class="card-meta">
             ${lead.industry ? `<span>📊 ${escHtml(lead.industry)}</span>` : ''}
             ${lead.size     ? `<span>👥 ${escHtml(lead.size)}</span>` : ''}
             ${lead.location ? `<span>📍 ${escHtml(lead.location)}</span>` : ''}
           </div>
-          <div style="margin-top:5px;display:flex;gap:6px;align-items:center">${website} ${techBadge}</div>
+          <div class="card-meta-row">
+            ${website}
+            ${techBadge}
+          </div>
         </div>
         <div class="card-badges">
-          ${score != null ? `<span class="badge ${scoreClass}">${score}/10</span>` : ''}
           ${statusBadge}
+          ${crmBadge}
         </div>
       </div>
       <div class="card-body">
-        ${lead.description && !lead.summary ? `<div style="font-size:.78rem;color:#B0C4D8;line-height:1.55">${escHtml(lead.description)}</div>` : ''}
+        ${scoreBarHtml}
+        ${lead.description && !lead.summary ? `<div style="font-size:.75rem;color:#B0C4D8;line-height:1.55">${escHtml(lead.description)}</div>` : ''}
         ${summaryBlock}
+        ${qualReason}
         ${dmBlock}
         ${contactBlock}
-        ${pitchAngle}
-        ${painTags ? `<div><div style="font-size:.68rem;color:var(--muted);margin-bottom:4px">PAIN POINTS</div><div class="pain-points">${painTags}</div></div>` : ''}
-        ${qualReason}
+        ${techBlock}
+        ${painBlock}
       </div>
       ${emailSection}
       ${reviewActions}
     </div>`;
 }
 
-/* ── UI micro-helpers ────────────────────────────────────────────────── */
-function toggleEmail(btn, idx) {
-  const body = document.getElementById('email-' + idx);
-  const isOpen = body.classList.toggle('visible');
-  btn.classList.toggle('open', isOpen);
-  btn.querySelector('.arrow').textContent = isOpen ? '▼' : '▶';
-  btn.childNodes[1].textContent = isOpen ? ' Hide Outreach Email' : ' View Outreach Email';
+/* ─── Sequence tab switcher ───────────────────────────────────────────────── */
+function switchTab(btn, seqId, idx) {
+  btn.closest('.seq-tabs').querySelectorAll('.seq-tab').forEach((t,i) => t.classList.toggle('active', i===idx));
+  document.getElementById(seqId).querySelectorAll('.seq-panel').forEach((p,i) => p.style.display = i===idx ? 'flex' : 'none');
 }
 
-function copyEmail(btn, idx) {
-  const text = document.getElementById('email-' + idx)?.querySelector('.email-text')?.textContent || '';
-  navigator.clipboard.writeText(text).then(() => {
-    btn.textContent = '✓ Copied!'; btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'Copy email'; btn.classList.remove('copied'); }, 2000);
-  });
+function toggleEmail(idx) {
+  const body = document.getElementById('email-' + idx);
+  const btn  = document.getElementById('etoggle-' + idx);
+  const isOpen = body.classList.toggle('visible');
+  const seqLen = body.querySelectorAll('.seq-tab').length;
+  btn.innerHTML = `${isOpen ? '▼' : '▶'} &nbsp;${seqLen}-Touch Outreach Sequence`;
 }
 
 function copyText(btn, text) {
@@ -947,55 +1026,41 @@ function copyText(btn, text) {
   });
 }
 
-function switchTab(btn, seqId, idx) {
-  // Update tab buttons
-  btn.closest('div').querySelectorAll('.seq-tab').forEach((t, i) => {
-    t.style.background = i === idx ? 'var(--teal)' : 'var(--navy-lite)';
-    t.style.color = i === idx ? 'var(--navy)' : 'var(--muted)';
-  });
-  // Show/hide panels
-  const container = document.getElementById(seqId);
-  container.querySelectorAll('.seq-panel').forEach((p, i) => {
-    p.style.display = i === idx ? 'flex' : 'none';
-  });
-}
-
+/* ─── Controls ────────────────────────────────────────────────────────────── */
 function setControlsDisabled(on) {
-  document.getElementById('run-btn').disabled = on;
+  document.getElementById('run-btn').disabled    = on;
   document.getElementById('ingest-btn').disabled = on;
-  document.getElementById('run-btn').textContent = on ? '⟳ Running…' : '▶  Generate Leads';
+  document.getElementById('run-btn').textContent = on ? '⟳ Running…' : '▶ &nbsp;Generate Leads';
 }
 
 function showToast(msg, type='success') {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = `toast visible ${type}`;
-  setTimeout(() => t.className = 'toast', 4000);
+  setTimeout(() => t.className = 'toast', 4500);
 }
 
-function escHtml(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function escHtml(s) {
+  return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+function escAttr(s) { return escHtml(s); }
 
 function fmtMs(ms) {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
+  const s = Math.floor(ms/1000), m = Math.floor(s/60);
+  return m > 0 ? `${m}m ${s%60}s` : `${s}s`;
 }
 
-/* ── Load existing leads on boot ─────────────────────────────────────── */
+/* ─── Boot ────────────────────────────────────────────────────────────────── */
 async function loadExistingLeads() {
   try {
-    const data = await fetch(`${API}/leads`).then(r => r.json());
-    if (data.leads?.length) {
-      currentLeads = data.leads;
-      renderStats();
-      renderLeads();
-      appendLog(`› Loaded ${data.total} leads from previous run`);
+    const d = await fetch(`${API}/leads`).then(r => r.json());
+    if (d.leads?.length) {
+      currentLeads = d.leads;
+      renderStats(); renderLeads();
+      appendLog(`› Loaded ${d.total} leads from previous run`);
     }
   } catch {}
 }
 
-/* ── Init ────────────────────────────────────────────────────────────── */
 checkHealth();
 loadExistingLeads();
 </script>
