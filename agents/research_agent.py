@@ -85,10 +85,17 @@ class ResearchAgent(BaseAgent):
 
         # Use per-run max_leads if provided in state, else fall back to config.
         run_cap = state.get("max_leads") or settings.max_leads_per_run
-        valid_results = [r for r in search_results if r.get("url")][:run_cap]
-        self.log.info(f"Processing {len(valid_results)} candidates (cap={run_cap})")
+        # Try 5× more URLs than requested (min 15) to absorb scraping failures,
+        # LLM-invalid results, and dedup skips — stop collecting once run_cap is hit.
+        trial_size = max(run_cap * 5, 15)
+        valid_results = [r for r in search_results if r.get("url")][:trial_size]
+        self.log.info(f"Processing up to {len(valid_results)} candidates (target={run_cap})")
 
         for result in valid_results:
+            # Stop early once we've collected enough good leads
+            if len(new_leads) >= run_cap:
+                self.log.info(f"Reached target of {run_cap} leads, stopping early")
+                break
             url = result.get("url", "")
 
             # Scrape homepage + contact page text for LLM

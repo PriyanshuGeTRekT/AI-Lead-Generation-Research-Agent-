@@ -101,14 +101,16 @@ def run_pipeline_task(self, keyword: str, run_id: str, max_leads: int = None) ->
 
         log_lead_quality(leads)
 
-        # Atomic write — identical to the sync path in api/main.py
-        # DATA_PATH env var set in docker-compose.yml; falls back to the same default
+        # Atomic write — never overwrite existing data with an empty result.
+        # If this run found 0 leads (scraping failure, all filtered out, etc.)
+        # keep whatever was previously saved so the dashboard stays populated.
         data_path = Path(_os.getenv("DATA_PATH", "./data/leads.json"))
         data_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = data_path.with_suffix(".tmp")
-        with open(tmp_path, "w") as f:
-            json.dump(leads, f, indent=2)
-        _os.replace(tmp_path, data_path)
+        if leads:
+            tmp_path = data_path.with_suffix(".tmp")
+            with open(tmp_path, "w") as f:
+                json.dump(leads, f, indent=2)
+            _os.replace(tmp_path, data_path)
 
         qualified = [l for l in leads if l.get("status") in ("outreach_ready", "pending_review")]
         disqualified = [l for l in leads if l.get("status") == "disqualified"]

@@ -1085,9 +1085,9 @@ function copyText(btn, text) {
 
 /* ─── Controls ────────────────────────────────────────────────────────────── */
 function setControlsDisabled(on) {
-  document.getElementById('run-btn').disabled    = on;
+  document.getElementById('run-btn').disabled   = on;
   document.getElementById('ingest-btn').disabled = on;
-  document.getElementById('run-btn').textContent = on ? '⟳ Running…' : '▶ &nbsp;Generate Leads';
+  document.getElementById('run-btn').innerHTML  = on ? '⟳ &nbsp;Running…' : '▶ &nbsp;Generate Leads';
 }
 
 function showToast(msg, type='success') {
