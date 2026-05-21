@@ -13,6 +13,8 @@ Endpoints:
   GET  /metrics                   Observability metrics summary
   GET  /health                    Detailed health check
 """
+import csv
+import io
 import json
 import os
 import uuid
@@ -20,7 +22,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
@@ -100,11 +102,11 @@ async def validation_handler(request: Request, exc: InputValidationError):
 # ── Models ────────────────────────────────────────────────────────────────────
 
 class LeadRequest(BaseModel):
-    keyword: str = "HRMS software company India"
+    keyword: str = "manufacturing company India 200 employees"
 
     class Config:
         json_schema_extra = {
-            "example": {"keyword": "manufacturing company India 200 employees"}
+            "example": {"keyword": "logistics company India 500 employees"}
         }
 
 
@@ -415,6 +417,67 @@ def reject_lead(lead_id: str):
     lead["status"] = "disqualified"
     _save_leads(leads)
     return {"message": f"Lead {lead_id} rejected", "lead": lead}
+
+
+@app.get("/leads/export/csv")
+def export_leads_csv(status: Optional[str] = None):
+    """
+    Export leads as a CSV file for the sales team.
+    Includes all contact fields: company, industry, size, location, address,
+    phone, emails, decision makers, pain points, score, and outreach email.
+
+    Optional ?status= filter: outreach_ready | qualified | disqualified | pending_review
+    """
+    leads = _load_leads()
+    if status:
+        leads = [l for l in leads if l.get("status") == status]
+
+    fieldnames = [
+        "company_name", "website", "industry", "size", "location",
+        "address", "phone", "contact_emails", "decision_makers",
+        "pain_points", "qualification_score", "status",
+        "email_subject", "email_body",
+    ]
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+
+    for lead in leads:
+        outreach = lead.get("outreach_draft") or {}
+        writer.writerow({
+            "company_name": lead.get("company_name", ""),
+            "website": lead.get("website", ""),
+            "industry": lead.get("industry", ""),
+            "size": lead.get("size", ""),
+            "location": lead.get("location", ""),
+            "address": lead.get("address", ""),
+            "phone": lead.get("phone", ""),
+            "contact_emails": "; ".join(lead.get("contact_emails") or []),
+            "decision_makers": "; ".join(lead.get("decision_makers") or []),
+            "pain_points": "; ".join(lead.get("pain_points") or []),
+            "qualification_score": lead.get("qualification_score", ""),
+            "status": lead.get("status", ""),
+            "email_subject": outreach.get("subject", ""),
+            "email_body": outreach.get("email_body", ""),
+        })
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=leads.csv"},
+    )
+
+
+@app.get("/leads/{lead_id}")
+def get_lead(lead_id: str):
+    """Retrieve a single lead by ID."""
+    leads = _load_leads()
+    lead = next((l for l in leads if l.get("id") == lead_id), None)
+    if not lead:
+        raise HTTPException(status_code=404, detail=f"Lead {lead_id} not found")
+    return lead
 
 
 @app.get("/metrics")

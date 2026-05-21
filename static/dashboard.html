@@ -268,7 +268,7 @@
     <div>
       <div class="section-label">Target Market Keyword</div>
       <div class="input-group">
-        <textarea id="keyword" placeholder="e.g. manufacturing company India 500 employees HRMS">HRMS software company India</textarea>
+        <textarea id="keyword" placeholder="e.g. manufacturing company India 500 employees">manufacturing company India 200 employees</textarea>
         <button class="btn btn-primary" id="run-btn" onclick="runPipeline()">▶ &nbsp;Generate Leads</button>
         <button class="btn btn-secondary" id="ingest-btn" onclick="runIngest()">⟳ &nbsp;Re-ingest RAG Knowledge</button>
       </div>
@@ -404,6 +404,14 @@
       <button class="chip" onclick="setFilter('pending_review', this)">⏳ Pending Review</button>
       <button class="chip" onclick="setFilter('disqualified', this)">Disqualified</button>
       <button class="chip" onclick="setFilter('researched', this)">Researched</button>
+      <a href="/leads/export/csv" download="leads.csv"
+         style="margin-left:auto;padding:5px 14px;border-radius:20px;font-size:.78rem;font-weight:600;
+                border:1px solid rgba(0,180,166,.4);color:var(--teal);background:rgba(0,180,166,.08);
+                text-decoration:none;transition:all .15s"
+         onmouseover="this.style.background='rgba(0,180,166,.18)'"
+         onmouseout="this.style.background='rgba(0,180,166,.08)'">
+        ⬇ Export CSV
+      </a>
     </div>
 
     <div class="leads-grid" id="leads-grid">
@@ -822,6 +830,23 @@ function buildCard(lead, idx) {
     ? `<a href="${escHtml(lead.website)}" target="_blank" rel="noopener"
          style="color:var(--teal);text-decoration:none;font-size:.75rem">${escHtml(lead.website.replace(/https?:\/\//,''))}</a>` : '';
 
+  // Contact info block
+  const emails = (lead.contact_emails || []).filter(Boolean);
+  const emailsHtml = emails.length
+    ? emails.map(e => `<a href="mailto:${escHtml(e)}" style="color:var(--teal);text-decoration:none">${escHtml(e)}</a>`).join(', ')
+    : '';
+  const phoneHtml = lead.phone
+    ? `<a href="tel:${escHtml(lead.phone)}" style="color:var(--teal);text-decoration:none">${escHtml(lead.phone)}</a>`
+    : '';
+  const hasContact = emailsHtml || phoneHtml || lead.address;
+  const contactBlock = hasContact ? `
+    <div style="font-size:.68rem;color:var(--muted);margin-bottom:4px">CONTACT INFO</div>
+    <div style="display:flex;flex-direction:column;gap:3px;font-size:.76rem">
+      ${emailsHtml ? `<div>✉ ${emailsHtml}</div>` : ''}
+      ${phoneHtml  ? `<div>📞 ${phoneHtml}</div>` : ''}
+      ${lead.address ? `<div style="color:#B0C4D8">🏢 ${escHtml(lead.address)}</div>` : ''}
+    </div>` : '';
+
   return `
     <div class="lead-card">
       <div class="card-header">
@@ -842,6 +867,7 @@ function buildCard(lead, idx) {
       <div class="card-body">
         ${lead.description && !lead.summary ? `<div style="font-size:.78rem;color:#B0C4D8;line-height:1.55">${escHtml(lead.description)}</div>` : ''}
         ${summaryBlock}
+        ${contactBlock}
         ${painTags ? `<div><div style="font-size:.68rem;color:var(--muted);margin-bottom:4px">PAIN POINTS</div><div class="pain-points">${painTags}</div></div>` : ''}
         ${qualReason}
       </div>

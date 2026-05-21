@@ -17,14 +17,14 @@ from functools import lru_cache
 class Settings(BaseSettings):
     # ── LLM ───────────────────────────────────────────────────────────────────
     groq_api_key: str
-    groq_model: str = "llama3-8b-8192"
+    groq_model: str = "llama-3.1-8b-instant"
 
     # LLM generation parameters
     # temperature=0.1 for structured extraction (deterministic)
     # temperature=0.4 for email writing (some creativity needed)
     llm_temperature_extract: float = 0.1
     llm_temperature_creative: float = 0.4
-    llm_max_tokens_extract: int = 600
+    llm_max_tokens_extract: int = 1000
     llm_max_tokens_creative: int = 500
 
     # ── RAG ───────────────────────────────────────────────────────────────────
@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     # ── Human-in-the-Loop (Slack) ─────────────────────────────────────────────
     slack_webhook_url: str = ""          # Slack Incoming Webhook URL (optional)
     base_url: str = "http://localhost:8000"  # used in Slack approve/reject links
+    sender_name: str = "Priyanshu"       # Name used in outreach email sign-offs
 
     # ── Async Pipeline (Celery) ───────────────────────────────────────────────
     celery_broker_url: str = "redis://redis:6379/1"    # Redis DB 1 for Celery

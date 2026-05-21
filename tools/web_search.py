@@ -8,6 +8,7 @@ from urllib.parse import urlparse, urljoin
 from loguru import logger
 from tools.naukri_scraper import search_naukri_companies
 from tools.indeed_scraper import search_indeed_companies
+from core.config import get_settings as _get_settings
 
 # ── Contact extraction helpers ─────────────────────────────────────────────────
 
@@ -39,7 +40,7 @@ def extract_phone(text: str) -> str:
         return re.sub(r"[\s\-]+", "-", match.group()).strip()
     return ""
 
-SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
+SERPER_API_KEY = _get_settings().serper_api_key
 
 
 def search_companies(keyword: str, max_results: int = 10) -> List[Dict]:
@@ -308,13 +309,13 @@ def search_companies_multi_source(keyword: str) -> List[Dict]:
     Merges results and deduplicates by root domain.
     Returns a unified list of company lead dicts.
     """
-    # --- DuckDuckGo ---
-    ddg_raw = search_companies(keyword)
-    duckduckgo_results = []
-    for r in ddg_raw:
+    # --- Serper (Google Search) ---
+    serper_raw = search_companies(keyword)
+    serper_results = []
+    for r in serper_raw:
         if "source" not in r:
-            r["source"] = "duckduckgo"
-        duckduckgo_results.append(r)
+            r["source"] = "serper"
+        serper_results.append(r)
 
     # --- Naukri ---
     naukri_results = search_naukri_companies()
@@ -322,11 +323,11 @@ def search_companies_multi_source(keyword: str) -> List[Dict]:
     # --- Indeed ---
     indeed_results = search_indeed_companies()
 
-    duckduckgo_count = len(duckduckgo_results)
+    serper_count = len(serper_results)
     naukri_count = len(naukri_results)
     indeed_count = len(indeed_results)
 
-    all_results = duckduckgo_results + naukri_results + indeed_results
+    all_results = serper_results + naukri_results + indeed_results
 
     # Deduplicate by root domain (strip www.)
     seen_domains: set = set()
@@ -347,7 +348,7 @@ def search_companies_multi_source(keyword: str) -> List[Dict]:
 
     deduped_count = len(deduped)
     logger.info(
-        f"Multi-source search: {duckduckgo_count} duckduckgo, "
+        f"Multi-source search: {serper_count} serper, "
         f"{naukri_count} naukri, {indeed_count} indeed, "
         f"{deduped_count} after dedup"
     )

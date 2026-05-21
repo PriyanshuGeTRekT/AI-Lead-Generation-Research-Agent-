@@ -31,6 +31,7 @@ Write a personalized cold outreach email that:
 3. Connects our HRMS solution to that pain point using ONLY the product info above
 4. Has a clear, low-friction CTA (demo, quick call)
 5. Is concise (max 150 words)
+6. Sign off with: "Best regards,\n{sender_name}\nHumanMaximizer"
 
 Respond with JSON ONLY:
 {{
@@ -62,6 +63,7 @@ class SalesAgent(BaseAgent):
 
             prompt = OUTREACH_PROMPT.format(
                 rag_context=rag_context,
+                sender_name=settings.sender_name,
                 lead_info=json.dumps({
                     "company_name": lead.get("company_name"),
                     "industry": lead.get("industry"),
