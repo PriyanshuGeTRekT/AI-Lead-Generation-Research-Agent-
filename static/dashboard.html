@@ -342,6 +342,21 @@
       <div class="section-label">Target Market Keyword</div>
       <div class="input-group">
         <textarea id="keyword" placeholder="e.g. logistics company India 500 employees">manufacturing company India 200 employees</textarea>
+
+        <!-- Max leads slider -->
+        <div style="margin-top:4px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+            <span class="section-label" style="margin-bottom:0">Max Leads to Find</span>
+            <span id="max-leads-val" style="font-family:var(--mono);font-weight:800;font-size:.9rem;color:var(--teal)">10</span>
+          </div>
+          <input type="range" id="max-leads-slider" min="1" max="100" value="10" step="1"
+            oninput="document.getElementById('max-leads-val').textContent=this.value"
+            style="width:100%;accent-color:var(--teal);cursor:pointer" />
+          <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--muted);margin-top:3px">
+            <span>1 · demo</span><span>50 · default</span><span>100 · max</span>
+          </div>
+        </div>
+
         <button class="btn btn-primary" id="run-btn" onclick="runPipeline()">▶ &nbsp;Generate Leads</button>
         <button class="btn btn-secondary" id="ingest-btn" onclick="runIngest()">⟳ &nbsp;Rebuild RAG Knowledge Base</button>
       </div>
@@ -495,6 +510,7 @@ let currentLeads = [];
 let activeFilter = 'all';
 let sortByScore  = true;  // default: highest score first
 const crmPushed  = new Set(); // track which lead IDs have been CRM-pushed this session
+const knownLeadIds = new Set(); // dedup across multiple runs in the same session
 
 // Timing thresholds for stage inference (ms)
 const STAGE_RESEARCH_END = 60000;
@@ -551,11 +567,13 @@ async function runPipeline() {
   resetProgress();
   runStartTime = Date.now();
 
+  const maxLeads = parseInt(document.getElementById('max-leads-slider')?.value || '10');
+
   try {
     const res = await fetch(`${API}/generate-leads`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keyword }),
+      body: JSON.stringify({ keyword, max_leads: maxLeads }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Pipeline error');
@@ -665,17 +683,36 @@ function markPipelineError() {
 
 /* ─── Results handler ─────────────────────────────────────────────────────── */
 function handleResults(data, elapsed) {
-  currentLeads = data.leads || [];
-  const found   = currentLeads.length;
-  const qual    = currentLeads.filter(l => ['outreach_ready','pending_review'].includes(l.status)).length;
-  const slack   = currentLeads.filter(l => l.status === 'pending_review').length;
+  const incoming = data.leads || [];
+
+  // Deduplicate: only keep leads not already shown in this session
+  const newLeads = incoming.filter(l => {
+    const key = l.id || l.company_name;
+    if (!key || knownLeadIds.has(key)) return false;
+    knownLeadIds.add(key);
+    return true;
+  });
+  const dupCount = incoming.length - newLeads.length;
+
+  // Prepend new leads to the front (newest = #1)
+  currentLeads = [...newLeads, ...currentLeads];
+
+  const found = newLeads.length;
+  const qual  = currentLeads.filter(l => ['outreach_ready','pending_review'].includes(l.status)).length;
+  const slack = currentLeads.filter(l => l.status === 'pending_review').length;
   document.getElementById('pc-found').textContent = found;
   document.getElementById('pc-qual').textContent  = qual;
   document.getElementById('pc-slack').textContent = slack;
   renderStats();
-  renderLog(data.pipeline_log || [`Pipeline complete — ${found} leads`]);
+
+  const logLines = data.pipeline_log || [`Pipeline complete — ${found} new leads`];
+  if (dupCount > 0) logLines.push(`› ${dupCount} duplicate(s) skipped (already shown this session)`);
+  renderLog(logLines);
+
   renderLeads();
   if (elapsed) document.getElementById('m-latency').textContent = fmtMs(elapsed);
+  if (dupCount > 0 && found === 0) showToast(`All ${dupCount} results already shown — try a different keyword`, 'error');
+  else if (dupCount > 0) showToast(`✓ +${found} new leads (${dupCount} duplicates skipped)`, 'success');
 }
 
 /* ─── Progress panel helpers ──────────────────────────────────────────────── */
@@ -820,7 +857,12 @@ function renderLeads() {
     grid.innerHTML = `<div class="empty-state"><div class="es-icon">${currentLeads.length ? '🔍' : '🎯'}</div><p>${currentLeads.length ? 'No leads match this filter or search.' : 'No leads yet.<br>Enter a keyword and click <strong>Generate Leads</strong>.'}</p></div>`;
     return;
   }
-  grid.innerHTML = leads.map((lead, i) => buildCard(lead, i)).join('');
+  // Pass global position (1-based) for numbering; use currentLeads index so number
+  // stays stable regardless of filter — falls back to display position if not found
+  grid.innerHTML = leads.map((lead, i) => {
+    const globalPos = currentLeads.indexOf(lead);
+    return buildCard(lead, globalPos >= 0 ? globalPos : i);
+  }).join('');
 }
 
 /* ─── Build card ──────────────────────────────────────────────────────────── */
@@ -979,11 +1021,17 @@ function buildCard(lead, idx) {
     reviewActions = `<div style="padding:8px 14px;border-top:1px solid var(--border)"><span class="crm-status">✓ Pushed to CRM</span></div>`;
   }
 
+  const leadNum = idx + 1;
+  const totalLeads = currentLeads.length;
+
   return `
     <div class="lead-card${wasCrmPushed?' crm-pushed':''}">
       <div class="card-header">
         <div style="min-width:0;flex:1">
-          <div class="card-company">${escHtml(lead.company_name||'Unknown')}</div>
+          <div style="display:flex;align-items:center;gap:7px;margin-bottom:2px">
+            <span style="font-family:var(--mono);font-size:.65rem;font-weight:700;color:var(--muted);background:var(--navy-lite);border:1px solid var(--border);border-radius:4px;padding:1px 6px;flex-shrink:0">#${leadNum}<span style="opacity:.5"> / ${totalLeads}</span></span>
+            <div class="card-company" style="margin-bottom:0">${escHtml(lead.company_name||'Unknown')}</div>
+          </div>
           <div class="card-meta">
             ${lead.industry ? `<span>📊 ${escHtml(lead.industry)}</span>` : ''}
             ${lead.size     ? `<span>👥 ${escHtml(lead.size)}</span>` : ''}
@@ -1064,6 +1112,11 @@ async function loadExistingLeads() {
     const d = await fetch(`${API}/leads`).then(r => r.json());
     if (d.leads?.length) {
       currentLeads = d.leads;
+      // Register all existing leads so a new run won't re-show them
+      currentLeads.forEach(l => {
+        const key = l.id || l.company_name;
+        if (key) knownLeadIds.add(key);
+      });
       renderStats(); renderLeads();
       appendLog(`› Loaded ${d.total} leads from previous run`);
     }

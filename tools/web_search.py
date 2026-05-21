@@ -31,6 +31,46 @@ _SKIP_EMAIL_DOMAINS = {
     "example.com", "test.com",
 }
 
+# Words that indicate the scraped text is NOT an address (UI text, instructions, etc.)
+_BAD_ADDRESS_TOKENS = [
+    "driving license", "helmet", "gloves", "choose your profile",
+    "select one from", "associated with this mobile", "sign in", "log in",
+    "subscribe", "newsletter", "cookie", "privacy policy", "terms of",
+    "whatsapp", "follow us", "get in touch", "reach us", "call us",
+    "write to us", "click here", "download", "read more", "view all",
+    "learn more", "find out", "date :", "× loca", "for any further",
+]
+
+
+def _validate_address(text: str) -> str:
+    """
+    Return the address text only if it looks like a real physical address.
+    Discards UI text, navigation copy, and other scraping artifacts.
+    """
+    if not text:
+        return ""
+    text = text.strip()
+    # Length sanity check
+    if len(text) < 8 or len(text) > 180:
+        return ""
+    lower = text.lower()
+    # Reject if it contains known non-address phrases
+    for token in _BAD_ADDRESS_TOKENS:
+        if token in lower:
+            return ""
+    # Must contain at least one digit (floor number, plot number, pincode, etc.)
+    if not re.search(r'\d', text):
+        return ""
+    # Must have enough alphabetic content to be a real address
+    alpha_count = sum(1 for c in text if c.isalpha())
+    if alpha_count < 8:
+        return ""
+    # Reject if it's mostly non-alphanumeric (symbols / encoded junk)
+    alnum_count = sum(1 for c in text if c.isalnum())
+    if alnum_count < len(text) * 0.4:
+        return ""
+    return text
+
 
 def extract_emails(text: str) -> List[str]:
     """Extract unique business email addresses from raw text."""
@@ -999,11 +1039,18 @@ def scrape_company_contacts(url: str) -> Dict:
             if phone and not all_phones:
                 all_phones.append(phone)
             if not address_hint:
-                addr_match = re.search(
-                    r"(?:Address|Office|Location)[:\s]+([^\n<]{10,120})", clean_text, re.I
-                )
-                if addr_match:
-                    address_hint = addr_match.group(1).strip()
+                # Try multiple address label patterns, most specific first
+                for addr_pattern in [
+                    r"(?:Registered\s+(?:Office|Address)|Corporate\s+(?:Office|Address))\s*[:\-]\s*([^\n<]{15,150})",
+                    r"(?:Head\s+Office|Headquarters|HQ)\s*[:\-]\s*([^\n<]{15,150})",
+                    r"(?:Address|Office\s+Address)\s*[:\-]\s*([^\n<]{15,150})",
+                ]:
+                    addr_match = re.search(addr_pattern, clean_text, re.I)
+                    if addr_match:
+                        candidate = _validate_address(addr_match.group(1))
+                        if candidate:
+                            address_hint = candidate
+                            break
         except Exception:
             continue
 
