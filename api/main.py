@@ -2,15 +2,20 @@
 FastAPI Application
 -------------------
 Endpoints:
-  GET  /                  → Lead generation dashboard (UI)
-  POST /generate-leads    → Run full multi-agent pipeline
-  GET  /leads             → Retrieve stored leads
-  POST /ingest-knowledge  → Build RAG knowledge base
-  GET  /metrics           → Observability metrics summary
-  GET  /health            → Detailed health check
+  GET  /                          Lead generation dashboard (UI)
+  POST /generate-leads            Run pipeline (async via Celery if worker running, else sync)
+  GET  /pipeline-status/{run_id}  Poll async pipeline job result
+  GET  /leads                     Retrieve stored leads
+  GET  /leads/pending-review      Leads awaiting human approval
+  POST /leads/{id}/approve        Approve a pending_review lead
+  POST /leads/{id}/reject         Reject a pending_review lead
+  POST /ingest-knowledge          Build RAG knowledge base
+  GET  /metrics                   Observability metrics summary
+  GET  /health                    Detailed health check
 """
 import json
 import os
+import uuid
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
@@ -166,11 +171,34 @@ def ingest_knowledge():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _try_celery_async(keyword: str, run_id: str) -> bool:
+    """
+    Attempt to dispatch the pipeline to a Celery worker.
+    Returns True if the task was queued successfully, False if no worker is reachable.
+    This allows the endpoint to fall back to synchronous execution gracefully.
+    """
+    try:
+        from worker import run_pipeline_task
+        run_pipeline_task.apply_async(
+            kwargs={"keyword": keyword, "run_id": run_id},
+            task_id=run_id,
+        )
+        return True
+    except Exception:
+        return False
+
+
 @app.post("/generate-leads")
 def generate_leads(request: LeadRequest, req: Request):
     """
     Run the full Supervisor multi-agent pipeline:
-    Research Agent → Qualification Agent → Sales Agent
+    Research Agent -> Qualification Agent -> Sales Agent
+
+    Async mode (Celery worker running):
+      Returns immediately with a run_id. Poll /pipeline-status/{run_id} for results.
+
+    Sync mode (no worker, default):
+      Runs inline, returns results directly. Behavior identical to previous versions.
 
     Rate limited: 10 requests/minute per IP.
     Input sanitized against prompt injection.
@@ -182,7 +210,17 @@ def generate_leads(request: LeadRequest, req: Request):
 
     # Input validation + sanitization
     keyword = validate_keyword(request.keyword)
+    run_id = str(uuid.uuid4())[:8]
 
+    # Try async dispatch first; fall back to sync if no worker is available
+    if _try_celery_async(keyword, run_id):
+        return {
+            "status": "queued",
+            "run_id": run_id,
+            "message": f"Pipeline queued. Poll /pipeline-status/{run_id} for results.",
+        }
+
+    # Synchronous fallback (default when no Celery worker is running)
     try:
         from graph.supervisor import run_pipeline
         from observability.langsmith_tracer import log_lead_quality
@@ -190,10 +228,9 @@ def generate_leads(request: LeadRequest, req: Request):
         state = run_pipeline(keyword)
         leads = state.get("leads", [])
 
-        # Log quality metrics for observability
         log_lead_quality(leads)
 
-        # Persist results with atomic write (avoids corrupt file on concurrent requests or mid-write crash)
+        # Atomic write to avoid corrupt file on concurrent requests or mid-write crash
         data_path = Path(settings.data_path)
         data_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = data_path.with_suffix(".tmp")
@@ -201,15 +238,18 @@ def generate_leads(request: LeadRequest, req: Request):
             json.dump(leads, f, indent=2)
         os.replace(tmp_path, data_path)
 
-        qualified = [l for l in leads if l.get("status") == "outreach_ready"]
+        qualified = [l for l in leads if l.get("status") in ("outreach_ready", "pending_review")]
         disqualified = [l for l in leads if l.get("status") == "disqualified"]
+        pending = [l for l in leads if l.get("status") == "pending_review"]
 
         return {
             "status": "success",
+            "run_id": run_id,
             "keyword": keyword,
             "summary": {
                 "total": len(leads),
                 "qualified": len(qualified),
+                "pending_review": len(pending),
                 "disqualified": len(disqualified),
             },
             "pipeline_log": state.get("messages", []),
@@ -218,6 +258,34 @@ def generate_leads(request: LeadRequest, req: Request):
 
     except LLMError as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e.message}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/pipeline-status/{run_id}")
+def pipeline_status(run_id: str):
+    """
+    Poll the status of an async pipeline job dispatched via Celery.
+    States: pending | started | success | failure
+
+    If Celery is not running, this endpoint returns a 404 with a helpful message
+    since sync runs do not produce a pollable job ID.
+    """
+    try:
+        from celery.result import AsyncResult
+        from worker import celery_app
+        result = AsyncResult(run_id, app=celery_app)
+        response = {"run_id": run_id, "status": result.state}
+        if result.state == "SUCCESS":
+            response["result"] = result.result
+        elif result.state == "FAILURE":
+            response["error"] = str(result.result)
+        return response
+    except ImportError:
+        raise HTTPException(
+            status_code=404,
+            detail="Celery is not running. Pipeline executed synchronously; no job status to poll."
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -242,6 +310,82 @@ def get_leads(status: Optional[str] = None):
         leads = [l for l in leads if l.get("status") == status]
 
     return {"total": len(leads), "leads": leads}
+
+
+def _load_leads() -> list:
+    """Load leads from disk. Returns [] if file missing or unreadable."""
+    data_path = Path(settings.data_path)
+    if not data_path.exists():
+        return []
+    try:
+        with open(data_path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _save_leads(leads: list) -> None:
+    """Atomically save leads list to disk."""
+    data_path = Path(settings.data_path)
+    data_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = data_path.with_suffix(".tmp")
+    with open(tmp_path, "w") as f:
+        json.dump(leads, f, indent=2)
+    os.replace(tmp_path, data_path)
+
+
+@app.get("/leads/pending-review")
+def get_pending_review_leads():
+    """
+    Return all leads currently awaiting human review.
+    These are leads where the Sales Agent generated an outreach email
+    but SLACK_WEBHOOK_URL is configured, so they are held for approval
+    before being marked outreach_ready.
+    """
+    leads = _load_leads()
+    pending = [l for l in leads if l.get("status") == "pending_review"]
+    return {"total": len(pending), "leads": pending}
+
+
+@app.post("/leads/{lead_id}/approve")
+def approve_lead(lead_id: str):
+    """
+    Approve a pending_review lead, marking it outreach_ready.
+    Called by a human reviewer after inspecting the Slack notification.
+    The lead will then appear in GET /leads?status=outreach_ready.
+    """
+    leads = _load_leads()
+    lead = next((l for l in leads if l.get("id") == lead_id), None)
+    if not lead:
+        raise HTTPException(status_code=404, detail=f"Lead {lead_id} not found")
+    if lead.get("status") != "pending_review":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Lead is not pending review (current status: {lead.get('status')})"
+        )
+    lead["status"] = "outreach_ready"
+    _save_leads(leads)
+    return {"message": f"Lead {lead_id} approved", "lead": lead}
+
+
+@app.post("/leads/{lead_id}/reject")
+def reject_lead(lead_id: str):
+    """
+    Reject a pending_review lead, marking it disqualified.
+    Called by a human reviewer who decides the outreach email is not suitable.
+    """
+    leads = _load_leads()
+    lead = next((l for l in leads if l.get("id") == lead_id), None)
+    if not lead:
+        raise HTTPException(status_code=404, detail=f"Lead {lead_id} not found")
+    if lead.get("status") != "pending_review":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Lead is not pending review (current status: {lead.get('status')})"
+        )
+    lead["status"] = "disqualified"
+    _save_leads(leads)
+    return {"message": f"Lead {lead_id} rejected", "lead": lead}
 
 
 @app.get("/metrics")

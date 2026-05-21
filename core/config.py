@@ -61,6 +61,18 @@ class Settings(BaseSettings):
     max_keyword_length: int = 200        # prevent prompt injection via long inputs
     data_path: str = "./data/leads.json"
 
+    # ── Human-in-the-Loop (Slack) ─────────────────────────────────────────────
+    slack_webhook_url: str = ""          # Slack Incoming Webhook URL (optional)
+    base_url: str = "http://localhost:8000"  # used in Slack approve/reject links
+
+    # ── Async Pipeline (Celery) ───────────────────────────────────────────────
+    celery_broker_url: str = "redis://redis:6379/1"    # Redis DB 1 for Celery
+    celery_result_backend: str = "redis://redis:6379/1"
+
+    # ── Vector Store ──────────────────────────────────────────────────────────
+    use_pgvector: bool = False           # set True to use pgvector instead of ChromaDB
+    postgres_url: str = "postgresql://leadgen:leadgen@postgres:5432/leadgen"
+
     class Config:
         env_file = ".env"
         case_sensitive = False
