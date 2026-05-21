@@ -42,3 +42,7 @@ Thumbs.db
 *.pem
 *.key
 credentials.json
+
+# Generated presentations (binary, regenerated from scripts/)
+*.pptx
+*.pdf
