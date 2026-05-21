@@ -140,6 +140,56 @@ class BaseAgent(ABC):
 
         raise LLMError("LLM call failed after all retries")
 
+    def call_llm_structured(
+        self,
+        prompt: str,
+        schema: type,
+        temperature: float = None,
+        max_tokens: int = None,
+    ) -> object:
+        """
+        LLM call enforcing a Pydantic schema via .with_structured_output().
+        Returns a validated Pydantic model instance, not a raw string.
+
+        How it works: LangChain passes the schema as a JSON Schema tool definition
+        to the model. Groq/Llama 3.1 uses tool calling to return structured JSON
+        that LangChain auto-validates against the schema.
+
+        Falls back to call_llm() + parse_json_response() + manual model construction
+        if structured output fails. This ensures the agent never hard-fails due to
+        a schema enforcement issue.
+        """
+        temperature = temperature or settings.llm_temperature_extract
+        max_tokens = max_tokens or settings.llm_max_tokens_extract
+
+        # Cache key based on schema name + prompt
+        ck = cache_key("llm_structured", self.name, schema.__name__, prompt, str(temperature))
+        if True:  # caching enabled
+            cached = get_cached(ck)
+            if cached:
+                self.log.debug(f"Structured LLM cache hit (key: {ck[:16]})")
+                try:
+                    return schema.model_validate_json(cached)
+                except Exception:
+                    pass  # cache miss effectively, proceed to LLM call
+
+        llm = self._get_llm(temperature, max_tokens)
+
+        # Attempt 1: structured output via .with_structured_output()
+        try:
+            structured_llm = llm.with_structured_output(schema)
+            result = structured_llm.invoke(prompt)
+            # Cache the result
+            set_cached(ck, result.model_dump_json(), ttl=settings.redis_cache_ttl)
+            return result
+        except Exception as e:
+            self.log.warning(f"Structured output failed ({schema.__name__}), falling back to raw LLM: {e}")
+
+        # Fallback: raw LLM + JSON parsing + manual schema construction
+        raw = self.call_llm(prompt, temperature=temperature, max_tokens=max_tokens)
+        parsed = self.parse_json_response(raw)
+        return schema(**parsed)
+
     def parse_json_response(self, raw: str) -> dict:
         """
         Safely extract JSON from LLM response.

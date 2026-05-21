@@ -15,6 +15,7 @@ from rag.retriever import retrieve_hrms_context
 from rag.hallucination_guard import guard_llm_response
 from observability.langsmith_tracer import stage_timer, log_hallucination_event
 from core.config import get_settings
+from models.schemas import QualificationResult
 
 settings = get_settings()
 
@@ -71,19 +72,19 @@ class QualificationAgent(BaseAgent):
             )
 
             try:
-                # Use BaseAgent's call_llm (gets caching + retry automatically)
-                raw = self.call_llm(
+                # Use structured output to get a validated QualificationResult instance
+                result = self.call_llm_structured(
                     prompt,
+                    QualificationResult,
                     temperature=settings.llm_temperature_extract,
-                    max_tokens=settings.llm_max_tokens_extract,
                 )
-                result = self.parse_json_response(raw)
 
-                score = float(result.get("qualification_score", 0))
+                score = result.score
+                reasoning = result.reasoning
 
                 # Hallucination guard on qualification output
                 guard = guard_llm_response(
-                    response_text=json.dumps(result),
+                    response_text=json.dumps(result.model_dump()),
                     rag_context=rag_context,
                     strict=False,
                 )
@@ -92,8 +93,9 @@ class QualificationAgent(BaseAgent):
                     self.log.warning(f"Hallucination warning for {company_name}: {guard['warnings']}")
 
                 lead["qualification_score"] = score
-                lead["qualification_reason"] = result.get("qualification_reason", "")
-                lead["pain_points"] = result.get("pain_points_identified", lead.get("pain_points", []))
+                lead["qualification_reason"] = reasoning
+                lead["key_signals"] = result.key_signals
+                lead["recommended_action"] = result.recommended_action
 
                 if score >= settings.qualification_threshold:
                     lead["status"] = "qualified"
