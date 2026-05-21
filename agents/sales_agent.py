@@ -272,10 +272,12 @@ class SalesAgent(BaseAgent):
                 outreach_draft, follow_up_sequence = self._generate_sequence(lead, rag_context)
 
                 # Hallucination guard on Day 1 email body
+                # strict=False: sales emails naturally echo lead data (employee counts,
+                # company names) which the strict guard incorrectly flags as hallucinations.
                 guard = guard_llm_response(
                     response_text=outreach_draft.get("email_body", ""),
                     rag_context=rag_context,
-                    strict=True,
+                    strict=False,
                 )
                 if guard["action"] == "warn":
                     log_hallucination_event("sales_agent", guard, correlation_id)

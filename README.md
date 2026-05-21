@@ -1,10 +1,10 @@
 # AI Lead Generation & Research Agent
 
-An AI-powered lead generation system for HRMS software sales, built with a **Supervisor multi-agent architecture** using LangGraph, Groq (open-source LLMs), and RAG. The pipeline discovers leads from multiple sources, scores them with structured LLM output, and routes high-quality leads through a human review step before outreach.
+An AI-powered lead generation system for HRMS software sales, built with a **Supervisor multi-agent architecture** using LangGraph, DeepSeek V3 (primary) / Groq Llama 3.1 (fallback), RAG, and real B2B contact databases. The pipeline discovers leads from multiple sources, scores them with structured LLM output, enriches them with decision-maker contacts, and routes high-quality leads through a human review step before outreach.
 
 **Live dashboard** at `http://localhost:8000` (no curl required).
 
-![Dashboard](https://img.shields.io/badge/UI-Dashboard-teal) ![API](https://img.shields.io/badge/API-FastAPI-green) ![LLM](https://img.shields.io/badge/LLM-Llama%203.1-blue) ![Redis](https://img.shields.io/badge/Cache-Redis-red) ![Celery](https://img.shields.io/badge/Queue-Celery-brightgreen)
+![Dashboard](https://img.shields.io/badge/UI-Dashboard-teal) ![API](https://img.shields.io/badge/API-FastAPI-green) ![LLM](https://img.shields.io/badge/LLM-DeepSeek%20V3-blue) ![Redis](https://img.shields.io/badge/Cache-Redis-red) ![Celery](https://img.shields.io/badge/Queue-Celery-brightgreen) ![Instantly](https://img.shields.io/badge/B2B-Instantly.ai-purple)
 
 ## Architecture
 
@@ -19,17 +19,22 @@ An AI-powered lead generation system for HRMS software sales, built with a **Sup
      ┌────────────────┐  ┌──────────┐  ┌─────────────────────┐
      │ Research Agent │  │  Qualify │  │    Sales Agent      │
      │ Multi-source   │  │  Agent   │  │    RAG + LLM        │
-     │ search + LLM   │  │ RAG+LLM  │  │ Pydantic structured │
+     │ search + LLM   │  │ RAG+LLM  │  │ 4-touch sequence   │
      └──────┬─────────┘  └──────────┘  └────────┬────────────┘
             │                │                   │
             ▼                ▼                   ▼
    ┌─────────────────┐  Score 0-10       ┌──────────────────┐
-   │ Serper.dev      │  ≥5 → Sales       │  Human Review    │
-   │ (Google Search) │  <5 → Discard     │  (Slack, opt-in) │
-   │ Naukri.com      │                   └────────┬─────────┘
-   │ Indeed.in       │                            │
+   │ Instantly.ai    │  ≥5 → Sales       │  Human Review    │
+   │ (160M contacts) │  <5 → Discard     │  (Slack, opt-in) │
+   │ Serper.dev      │                   └────────┬─────────┘
+   │ (Google Search) │                            │
    └─────────────────┘               approve → outreach_ready
-   dedup by domain                   reject  → disqualified
+   + LinkedIn enrichment             reject  → disqualified
+   + tech stack detection
+   dedup by domain + Redis 24h cache
+
+   LLM Priority:
+   DeepSeek V3 (primary, 500 req/min) → Groq Llama 3.1 (fallback)
 
    Async path (Celery worker):
    ┌──────┐  POST /generate-leads   ┌────────────────┐
@@ -50,27 +55,33 @@ An AI-powered lead generation system for HRMS software sales, built with a **Sup
 | Component | Technology | Why |
 |-----------|-----------|-----|
 | Agent Orchestration | LangGraph | Conditional routing, shared state, early exit |
-| LLM | Llama 3.1 8B via Groq | Open-source model, sub-second LPU inference |
-| LLM Client | langchain-groq (ChatGroq) | LangChain wrapper enables full LangSmith tracing |
+| LLM (Primary) | DeepSeek V3 (`deepseek-chat`) | 500 req/min, OpenAI-compatible, much faster than free-tier Groq |
+| LLM (Fallback) | Llama 3.1 8B via Groq | Open-source model, sub-second LPU inference |
+| LLM Client | langchain-openai + langchain-groq | LangChain Runnables — automatic LangSmith tracing on both |
 | Vector Store | ChromaDB | Persistent, local, no infra needed |
 | Embeddings | sentence-transformers (all-MiniLM-L6-v2) | Open-source, HuggingFace |
-| Web Search | Serper.dev (Google Search API) | Real Google results, 2,500 free queries, India-targeted |
-| Multi-source Search | Serper.dev + Naukri.com + Indeed.in | Buying-signal lead discovery |
+| B2B Contact Database | Instantly.ai (160M+ contacts) | Pre-enriched leads: DM name, email, LinkedIn, title |
+| Web Search | Serper.dev (Google Search API) | Real Google results, multi-query with 12 city/industry variants |
+| LinkedIn Enrichment | Serper.dev → LinkedIn scrape | Decision maker name, title, LinkedIn URL per company |
+| Tech Stack Detection | `tools/tech_stack_detector.py` | Identifies current HR tools → personalizes pitch angle |
 | Structured Output | LangChain `.with_structured_output()` + Pydantic | Schema-enforced LLM responses |
 | Human Review | Slack Incoming Webhooks + Block Kit | Approve/reject leads before outreach |
 | Async Queue | Celery + Redis (DB 1) | Non-blocking pipeline, retries, job status |
-| Caching & Dedup | Redis (DB 0) | LLM response cache, rate limiting, lead dedup |
+| Caching & Dedup | Redis (DB 0) | LLM response cache + 24h lead dedup |
 | Vector Store (scale) | pgvector on PostgreSQL | Production-grade at high lead volume |
 | API | FastAPI | Async, auto-docs at /docs |
 | Observability | LangSmith + custom JSONL metrics | LLM-level + business-level tracing |
-| Containerization | Docker Compose | 4 containers: api, redis, celery_worker, postgres |
+| Containerization | Docker Compose | 5 containers: api, redis, celery_worker, celery_beat, postgres |
 
 ## Quick Start
 
 ### 1. Prerequisites
 - Docker & Docker Compose installed
-- Free Groq API key from [console.groq.com](https://console.groq.com)
-- (Optional) Serper.dev API key from [serper.dev](https://serper.dev) — 2,500 free queries
+- API key for at least one LLM provider:
+  - **DeepSeek** (recommended): [platform.deepseek.com](https://platform.deepseek.com) — higher rate limits, very fast
+  - **Groq** (free fallback): [console.groq.com](https://console.groq.com)
+- (Optional) Serper.dev API key from [serper.dev](https://serper.dev) — 2,500 free queries/month
+- (Optional) Instantly.ai API key from [instantly.ai](https://instantly.ai) — 1,000 free lead-finder credits/month
 - (Optional) LangSmith API key from [smith.langchain.com](https://smith.langchain.com)
 - (Optional) Slack Incoming Webhook URL for human-in-the-loop review
 
@@ -79,17 +90,27 @@ An AI-powered lead generation system for HRMS software sales, built with a **Sup
 git clone <repo>
 cd ai-lead-gen
 cp .env.example .env
-# Edit .env and add your GROQ_API_KEY (required) and any optional keys
+# Edit .env — add DEEPSEEK_API_KEY (or GROQ_API_KEY as fallback)
 ```
 
 Key `.env` variables:
 ```
-GROQ_API_KEY=your_key_here
+# Primary LLM — DeepSeek (higher rate limits, faster pipelines)
+DEEPSEEK_API_KEY=your_deepseek_key
+DEEPSEEK_MODEL=deepseek-chat
+
+# Fallback LLM — Groq (used if DEEPSEEK_API_KEY is empty)
+GROQ_API_KEY=your_groq_key
 GROQ_MODEL=llama-3.1-8b-instant
-SERPER_API_KEY=your_serper_key     # optional, falls back to curated dataset
-LANGCHAIN_API_KEY=your_ls_key      # optional, enables LangSmith tracing
-SLACK_WEBHOOK_URL=https://hooks... # optional, enables human review flow
-BASE_URL=http://localhost:8000     # used in Slack approve/reject links
+
+# Lead sources (both optional — pipeline works without them)
+SERPER_API_KEY=your_serper_key       # Google Search results
+INSTANTLY_API_KEY=your_instantly_key # B2B contact database (1k free credits)
+
+# Observability & notifications (all optional)
+LANGCHAIN_API_KEY=your_ls_key        # LangSmith tracing
+SLACK_WEBHOOK_URL=https://hooks...   # Human review via Slack
+BASE_URL=http://localhost:8000        # Used in Slack approve/reject links
 ```
 
 ### 3. Run
@@ -117,9 +138,11 @@ This scrapes humanmaximizer.com, chunks the content, embeds it with `all-MiniLM-
 ### 5. Generate Leads
 
 **Via Dashboard** (recommended):
-Open `http://localhost:8000`, enter a keyword, and click **"Generate Leads"**.
+Open `http://localhost:8000`, enter a keyword, set the **max leads slider** (1 for a quick demo, up to 100 for a full run), and click **"Generate Leads"**.
 
 If the Celery worker is running (full stack), the dashboard shows a live progress panel with three stages (Research → Qualify → Sales), an elapsed timer, and estimated completion time. It polls the `/pipeline-status/{run_id}` endpoint every 3 seconds automatically.
+
+New leads are prepended to the front of the results (newest first) and numbered `#1 / N`. Running the pipeline a second time only shows new leads — duplicates from the previous run are hidden automatically.
 
 **Via API:**
 ```bash
@@ -157,11 +180,15 @@ Clears the Redis deduplication cache and Celery result backend so the next run p
 Open **http://localhost:8000** in your browser:
 
 - **Keyword input** with "Generate Leads" button
+- **Max leads slider** (1–100): drag to 1 for a fast single-lead demo, 50 for a standard run
 - **Live progress panel** (async mode): animated Research → Qualify → Sales stage tracker with elapsed timer and lead count live-updating
-- **Lead cards** with score badges, pain point tags, qualification reasoning, and generated outreach emails
+- **Lead cards** numbered `#N / total`, with score badges, pain point tags, decision maker info, tech stack tags, and generated outreach emails
+- **Cross-run deduplication**: leads seen in a previous run in the same browser session are hidden — only genuinely new leads appear each time
+- **Newest-first ordering**: new leads prepend to the top of the grid
 - **Approve/Reject buttons** directly on each lead card (when status is `pending_review`)
-- **Expandable outreach emails** with one-click copy
-- **Filter by status**: Outreach Ready / Pending Review / Disqualified / Researched
+- **Expandable outreach emails** with one-click copy — full 4-touch sequence (Day 1, 3, 7, 14)
+- **Filter by status**: All / Outreach Ready / Pending Review / Disqualified / Researched
+- **Export CSV**: download all leads as a spreadsheet
 - **Metrics panel**: pipeline latency, lead counts, average score
 - **Pipeline log sidebar**: agent decisions as they happen
 
@@ -173,13 +200,27 @@ Visit `http://localhost:8000/docs` for Swagger UI (auto-generated from FastAPI).
 ## Agent Flow
 
 ### 1. Research Agent
-Takes a keyword, fans out to Serper.dev (Google Search API with India geo-targeting), Naukri.com, and Indeed.in. Serper results are filtered through a domain blocklist that removes aggregators (Wikipedia, LinkedIn, IndiaMART, Crunchbase, etc.) so only actual company websites reach the pipeline. Scrapes company homepages to get raw text. Uses Llama 3.1 to extract structured lead info (`LeadExtraction` Pydantic schema): company name, size, industry, location, decision makers, pain points. Results are deduplicated by root domain before passing downstream.
+Takes a keyword and a `max_leads` target. Queries **Instantly.ai** (160M-contact B2B database) first — results arrive pre-enriched with decision maker name, email, LinkedIn URL, and job title, so no scraping is needed for those leads. Falls back to **Serper.dev** (Google Search API with India geo-targeting, 12 city/industry query variants for diversity) for any remaining slots. Serper results are filtered through a domain blocklist that removes aggregators (Wikipedia, LinkedIn, IndiaMART, Crunchbase, etc.) so only actual company websites reach the pipeline. Scrapes company homepages + contact pages, then uses DeepSeek V3 to extract structured lead info: company name, size, industry, location, decision makers, pain points. Stops the moment `max_leads` valid leads are collected — no fixed URL trial cap.
+
+For each Serper-sourced lead (not pre-enriched by Instantly):
+- **LinkedIn enrichment** (`tools/linkedin_enricher.py`): Serper-searches for `"[company] HR Manager LinkedIn"` to find decision maker name, title, and LinkedIn URL
+- **Tech stack detection** (`tools/tech_stack_detector.py`): identifies current HR tools in use (SAP SuccessFactors, BambooHR, Darwinbox, manual Excel, etc.) to generate a personalized pitch angle
+- **Address validation**: regex + token blacklist rejects scraped nav text, form labels, and UI strings — only real office addresses pass through
+- **Email extraction**: regex extracts all `@domain` patterns from raw HTML, merged with LLM-extracted emails and de-duplicated
+
+Results are deduplicated by root domain and checked against a Redis 24-hour seen-cache before being added to the pipeline.
 
 ### 2. Qualification Agent
 Scores each lead 0–10 using RAG-grounded LLM reasoning with `QualificationResult` Pydantic schema via `.with_structured_output()`. Retrieves top-4 product context chunks from ChromaDB to match prospect needs against HumanMaximizer capabilities. Leads scoring ≥5.0 move forward; below threshold gets `status: disqualified`. Also generates a lead summary with a visual score bar (█░░░) and key signals for the dashboard.
 
 ### 3. Sales Agent
-Generates personalized outreach emails for qualified leads. Uses RAG to ground product claims in actual HumanMaximizer features. Runs a hallucination guard that checks fabricated revenue figures, year ranges, and product claims not present in retrieved chunks. If `SLACK_WEBHOOK_URL` is set, the lead goes to `pending_review` and a Block Kit Slack message is sent with Approve/Reject links. Without Slack, leads go directly to `outreach_ready`.
+Generates personalized 4-touch outreach sequences for the top 5 qualified leads (by score). Each sequence includes:
+- **Day 1**: Cold intro — opens with a company-specific insight, references their tech stack, single low-friction CTA
+- **Day 3**: Short follow-up — adds one new value point (stat, result, or question)
+- **Day 7**: Value email — industry insight, no ask, soft question to keep conversation alive
+- **Day 14**: Break-up email — honest, brief, leaves the door open
+
+Uses RAG to ground all product claims in actual HumanMaximizer feature documentation. Runs email verification (MX DNS lookup) on all extracted emails before the sequence is written. If `SLACK_WEBHOOK_URL` is set, sends a Slack Block Kit message with the Day 1 draft preview and Approve/Reject links. Without Slack, leads go directly to `outreach_ready`.
 
 ---
 
