@@ -1064,3 +1064,55 @@ def scrape_company_contacts(url: str) -> Dict:
         "phone": all_phones[0] if all_phones else "",
         "address": address_hint,
     }
+
+
+def search_company_address_snippets(company_name: str, country: str = "") -> str:
+    """
+    Search Google for the office address of a company and return raw search snippets.
+    Helpful for grounding physical address extraction.
+    """
+    if not SERPER_API_KEY:
+        return "No address search results available (missing API key)."
+
+    if country:
+        query = f"{company_name} {country} office address location"
+    else:
+        query = f"{company_name} office address location"
+
+    try:
+        resp = requests.post(
+            "https://google.serper.dev/search",
+            headers={"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"},
+            json={"q": query, "num": 5, "gl": "in", "hl": "en"},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        snippets = []
+
+        # 1. Check knowledge graph
+        kg = data.get("knowledgeGraph") or {}
+        kg_title = kg.get("title", "")
+        attributes = kg.get("attributes") or {}
+        kg_address = attributes.get("Address") or attributes.get("address") or attributes.get("Headquarters") or attributes.get("headquarters")
+        if kg_address:
+            snippets.append(f"Google Knowledge Graph Address for {kg_title or company_name}: {kg_address}")
+
+        # 2. Check answer box
+        ab = data.get("answerBox") or {}
+        ab_address = ab.get("answer") or ab.get("snippet")
+        if ab_address:
+            snippets.append(f"Google Direct Answer: {ab_address}")
+
+        # 3. Organic results
+        for r in data.get("organic", []):
+            title = r.get("title", "")
+            snippet = r.get("snippet", "")
+            snippets.append(f"- {title}: {snippet}")
+
+        return "\n".join(snippets)
+    except Exception as e:
+        logger.warning(f"Address search snippets failed for {company_name}: {e}")
+        return f"Could not perform Google address search: {e}"
+

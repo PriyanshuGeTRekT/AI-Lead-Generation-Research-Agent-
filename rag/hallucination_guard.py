@@ -38,13 +38,6 @@ HALLUCINATION_PATTERNS = [
     r"\$[\d,]+\s*(million|billion|M|B)",   # Fabricated revenue figures
     r"\d{4}-\d{4}",                         # Fabricated year ranges
     r"(founded|established) in \d{4}",      # Fabricated founding year
-    r"\d+,\d{3}\+?\s*employees",            # Suspiciously precise headcounts
-]
-
-# Claims that should ONLY come from RAG context
-PRODUCT_CLAIM_KEYWORDS = [
-    "humanmaximizer", "human maximizer", "our platform",
-    "our software", "our hrms", "our product",
 ]
 
 
@@ -87,10 +80,23 @@ def validate_product_claims(text: str, rag_context: str) -> bool:
 
     Returns True if claims are grounded, False if suspicious.
     """
-    for keyword in PRODUCT_CLAIM_KEYWORDS:
-        if keyword.lower() in text.lower():
-            # Claim references the product, verify it's in RAG context
-            if keyword.lower() not in rag_context.lower():
+    # Mapping from email keywords to acceptable grounding keywords in RAG context
+    grounding_map = {
+        "humanmaximizer": ["humanmaximizer", "human maximizer"],
+        "human maximizer": ["human maximizer", "humanmaximizer"],
+        "our platform": ["platform", "humanmaximizer", "human maximizer"],
+        "our software": ["software", "humanmaximizer", "human maximizer"],
+        "our hrms": ["hrms", "humanmaximizer", "human maximizer"],
+        "our product": ["product", "humanmaximizer", "human maximizer"],
+    }
+    
+    text_lower = text.lower()
+    rag_lower = rag_context.lower()
+    
+    for email_keyword, rag_keywords in grounding_map.items():
+        if email_keyword in text_lower:
+            # At least one of the mapped grounding keywords must be in RAG context
+            if not any(kw in rag_lower for kw in rag_keywords):
                 return False
     return True
 

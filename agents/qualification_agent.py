@@ -195,7 +195,7 @@ class QualificationAgent(BaseAgent):
                 f"Qualification Agent: {len(qualified_leads)} qualified, "
                 f"{len(disqualified_leads)} disqualified"
             ],
-            "next": "sales" if qualified_leads else "END",
+            "next": "sales" if leads else "END",
         }
 
 

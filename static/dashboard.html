@@ -981,6 +981,26 @@ function buildCard(lead, idx) {
   let emailSection = '';
   if (lead.outreach_draft?.email_body) {
     const d   = lead.outreach_draft;
+    const action = d.hallucination_action || (d.hallucination_confidence != null && d.hallucination_confidence < 0.7 ? 'warn' : 'pass');
+    const warnings = d.hallucination_warnings || [];
+    let warningBanner = '';
+    if (action === 'reject' || action === 'warn') {
+      const emoji = action === 'reject' ? '❌' : '⚠️';
+      const statusText = action === 'reject' ? 'REJECTED' : 'WARNING';
+      const colorText = action === 'reject' ? '#991b1b' : '#92400e';
+      const colorBorder = action === 'reject' ? '#ef4444' : '#f59e0b';
+      const colorBg = action === 'reject' ? '#fef2f2' : '#fffbeb';
+      const warningsList = warnings.length ? `<ul style="margin:4px 0 0 16px;padding:0;font-size:.68rem;line-height:1.4">${warnings.map(w => `<li>${escHtml(w)}</li>`).join('')}</ul>` : '';
+      warningBanner = `
+        <div class="hallucination-card-banner" style="margin-bottom:12px;padding:8px 12px;border-radius:6px;border-left:4px solid ${colorBorder};background:${colorBg};color:${colorText}">
+          <div style="font-weight:600;font-size:.72rem;display:flex;align-items:center;gap:6px">
+            <span>${emoji}</span>
+            <span>Hallucination Guard Status: ${statusText}</span>
+          </div>
+          ${warningsList}
+        </div>`;
+    }
+
     const seq = lead.follow_up_sequence || [];
     const all = [
       { label: 'Day 1', sublabel: 'Cold Intro', subject: d.subject, body: d.email_body },
@@ -1003,6 +1023,7 @@ function buildCard(lead, idx) {
           ▶ &nbsp;${all.length}-Touch Outreach Sequence
         </button>
         <div class="email-body" id="email-${idx}">
+          ${warningBanner}
           <div class="seq-tabs">${tabs}</div>
           <div id="seq-${idx}">${panels}</div>
         </div>

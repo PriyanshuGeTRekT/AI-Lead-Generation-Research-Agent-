@@ -81,6 +81,34 @@ def send_lead_review_request(lead: dict) -> bool:
     key_signals = lead.get("key_signals", [])
     signals_text = "  ·  ".join(key_signals[:3]) if key_signals else "—"
 
+    warnings_list = []
+    
+    # 1. Low qualification score warning
+    is_low_score = False
+    try:
+        from core.config import get_settings
+        settings = get_settings()
+        if score != "N/A" and float(score) < settings.qualification_threshold:
+            is_low_score = True
+    except Exception:
+        pass
+        
+    if is_low_score:
+        warnings_list.append(f"⚠️ *Low Qualification Score*: `{score}/10` (Below threshold of `{settings.qualification_threshold}`)")
+
+    # 2. Competitor auto-disqualification warning
+    if lead.get("recommended_action") == "disqualify (competitor)":
+        warnings_list.append("🚫 *Competitor Alert*: Lead identified as an HR/HRMS competitor")
+
+    # 3. Hallucination guard warnings
+    hallucination_action = outreach_draft.get("hallucination_action", "pass")
+    hallucination_warnings = outreach_draft.get("hallucination_warnings") or []
+    if hallucination_action in ("warn", "reject") or hallucination_warnings:
+        emoji = "❌" if hallucination_action == "reject" else "⚠️"
+        warnings_list.append(f"{emoji} *Hallucination Guard*: `{hallucination_action.upper()}`")
+        for hw in hallucination_warnings:
+            warnings_list.append(f"  · {hw}")
+
     blocks = [
         # ── Header ───────────────────────────────────────────────────────────
         {
@@ -100,7 +128,24 @@ def send_lead_review_request(lead: dict) -> bool:
             },
         },
         {"type": "divider"},
-        # ── Key signals + pain points side-by-side ───────────────────────────
+    ]
+
+    # ── Warnings block if any ────────────────────────────────────────────
+    if warnings_list:
+        warnings_text = "\n".join(warnings_list)
+        blocks.extend([
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"🚨 *Review Alerts / System Flags:*\n{warnings_text}"
+                }
+            },
+            {"type": "divider"}
+        ])
+
+    # ── Key signals + pain points side-by-side ───────────────────────────
+    blocks.extend([
         {
             "type": "section",
             "fields": [
@@ -149,7 +194,7 @@ def send_lead_review_request(lead: dict) -> bool:
                 },
             ],
         },
-    ]
+    ])
 
     payload = {"blocks": blocks}
 

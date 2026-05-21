@@ -218,30 +218,14 @@ class SalesAgent(BaseAgent):
     @stage_timer("sales_agent")
     def run(self, state: LeadState) -> LeadState:
         leads = state.get("leads", [])
-        qualified = [l for l in leads if l.get("status") == "qualified"]
+        qualified = [l for l in leads if l.get("status") in ("qualified", "disqualified", "researched")]
         correlation_id = state.get("correlation_id", self.correlation_id)
 
-        # Cap email-sequence generation to the top 5 leads by score to stay
-        # within Groq free-tier rate limits (30 req/min). All leads are still
-        # returned as qualified — only the top 5 get email sequences drafted.
-        MAX_SEQUENCES = 5
-        qualified_for_sequences = sorted(
-            qualified,
-            key=lambda l: l.get("qualification_score") or 0,
-            reverse=True,
-        )[:MAX_SEQUENCES]
-        qualified_rest = [l for l in qualified if l not in qualified_for_sequences]
-
-        # Leads that won't get sequences still become outreach_ready / pending_review
-        for lead in qualified_rest:
-            if settings.slack_webhook_url:
-                lead["status"] = "pending_review"
-            else:
-                lead["status"] = "outreach_ready"
+        # Process all qualified/disqualified leads for sequence generation and Slack HITL review
+        qualified_for_sequences = qualified
 
         self.log.info(
-            f"Generating outreach sequences for top {len(qualified_for_sequences)} "
-            f"of {len(qualified)} qualified leads (rate-limit cap)"
+            f"Generating outreach sequences for all {len(qualified_for_sequences)} leads"
         )
 
         for lead in qualified_for_sequences:
@@ -279,15 +263,15 @@ class SalesAgent(BaseAgent):
                     rag_context=rag_context,
                     strict=False,
                 )
-                if guard["action"] == "warn":
+                if guard["action"] in ("warn", "reject"):
                     log_hallucination_event("sales_agent", guard, correlation_id)
-                    self.log.warning(f"Hallucination warning in Day 1 email for {company_name}")
-                elif guard["action"] == "reject":
-                    self.log.error(f"Day 1 email for {company_name} rejected by hallucination guard")
-                    lead["outreach_draft"] = None
-                    continue
+                    self.log.warning(
+                        f"Hallucination {guard['action']} in Day 1 email for {company_name}: {guard['warnings']}"
+                    )
 
                 outreach_draft["hallucination_confidence"] = guard["confidence"]
+                outreach_draft["hallucination_action"] = guard["action"]
+                outreach_draft["hallucination_warnings"] = guard["warnings"]
                 lead["outreach_draft"] = outreach_draft
                 lead["follow_up_sequence"] = follow_up_sequence
 

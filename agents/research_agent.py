@@ -36,6 +36,9 @@ Search Results:
 Scraped Website Content:
 {scraped_content}
 
+Address Search Snippets (Google):
+{address_search_snippets}
+
 Extract lead information and respond with a JSON object ONLY (no explanation):
 {{
   "company_name": "...",
@@ -53,10 +56,11 @@ Extract lead information and respond with a JSON object ONLY (no explanation):
 
 Rules:
 - contact_emails: list every email address you can find in the content (look for @domain patterns)
-- address: copy any physical office address found verbatim
+- address: copy any physical office address found verbatim. Check the "Address Search Snippets (Google)" section for the physical address. If not found in the scraped content, prioritize the physical office address found in the Google Address Search Snippets!
 - decision_makers: include names if found, else job titles (HR Manager, CEO, etc.)
 - If this company sells HRMS/payroll/HR software itself, return: {{"status": "invalid"}}
 - If you cannot extract valid company info, return: {{"status": "invalid"}}
+- CRITICAL REGIONAL RULE: If the target keyword specifies a country (e.g., "India"), you MUST verify that the company is actually located in, has a major office in, or operates significantly in that country. If it is located in a completely different country/region (for example, a USA-only company when the keyword specifies "India"), you MUST return: {{"status": "invalid"}}
 """
 
 
@@ -68,6 +72,21 @@ class ResearchAgent(BaseAgent):
         keyword = state["keyword"]
         correlation_id = state.get("correlation_id", self.correlation_id)
         self.log.info(f"Starting search for keyword: '{keyword}'")
+
+        # Target country detection
+        keyword_lower = keyword.lower()
+        target_country = ""
+        if "india" in keyword_lower:
+            target_country = "India"
+        elif any(k in keyword_lower for k in ["usa", "united states", " u.s.", "/us"]):
+            target_country = "United States"
+        elif "germany" in keyword_lower:
+            target_country = "Germany"
+        elif "uk" in keyword_lower or "united kingdom" in keyword_lower:
+            target_country = "United Kingdom"
+
+        if target_country:
+            self.log.info(f"Target country constraint detected: '{target_country}'")
 
         # Determine cap before searching so we don't over-fetch
         run_cap = state.get("max_leads") or settings.max_leads_per_run
@@ -107,9 +126,17 @@ class ResearchAgent(BaseAgent):
             # Regex-extract contacts from raw HTML (independent of LLM)
             contacts = scrape_company_contacts(url)
 
+            # Google Address Snippet Search for grounding physical address
+            search_title = result.get("title", "")
+            company_search_name = search_title.split("-")[0].split("|")[0].strip()
+            
+            from tools.web_search import search_company_address_snippets
+            address_snippets = search_company_address_snippets(company_search_name, target_country)
+
             prompt = RESEARCH_PROMPT.format(
                 search_results=json.dumps(result, indent=2),
                 scraped_content=scraped,
+                address_search_snippets=address_snippets,
             )
 
             try:
@@ -131,6 +158,91 @@ class ResearchAgent(BaseAgent):
                     lead_data["phone"] = contacts["phone"]
                 if contacts["address"] and not lead_data.get("address"):
                     lead_data["address"] = contacts["address"]
+
+                # Fallback Address parsing from Serper snippets if still empty
+                if not lead_data.get("address"):
+                    if "Google Knowledge Graph Address for" in address_snippets:
+                        for line in address_snippets.split("\n"):
+                            if "Google Knowledge Graph Address for" in line:
+                                lead_data["address"] = line.split(":", 1)[1].strip()
+                                break
+                    elif "Google Direct Answer:" in address_snippets:
+                        for line in address_snippets.split("\n"):
+                            if "Google Direct Answer:" in line:
+                                lead_data["address"] = line.split(":", 1)[1].strip()
+                                break
+                    else:
+                        # Fallback: extract address-like content from organic snippets
+                        for line in address_snippets.split("\n"):
+                            line_lower = line.lower()
+                            if any(k in line_lower for k in ["address", "headquarters", "registered office", "corporate office", "office location", "office at", "located at", "stands located at", "plot no", "street", "building", "road", "sector", "industrial area"]):
+                                if ":" in line:
+                                    parts = line.split(":", 1)[1].strip()
+                                    if len(parts) > 15:
+                                        lead_data["address"] = parts
+                                        break
+
+                # If location is empty but we got a valid address, extract city/state/country as location
+                if not lead_data.get("location") and lead_data.get("address"):
+                    addr_lower = lead_data["address"].lower()
+                    if target_country == "India":
+                        for city in ["mumbai", "bengaluru", "bangalore", "delhi", "noida", "gurugram", "gurgaon", "pune", "chennai", "hyderabad", "kolkata"]:
+                            if city in addr_lower:
+                                lead_data["location"] = f"{city.capitalize()}, India"
+                                break
+                        else:
+                            lead_data["location"] = "India"
+                    elif target_country == "United States":
+                        lead_data["location"] = "United States"
+                    elif target_country:
+                        lead_data["location"] = target_country
+
+                # Target country filtering (run after all address and location fields are resolved)
+                if target_country:
+                    loc_val = (lead_data.get("location") or "").lower()
+                    addr_val = (lead_data.get("address") or "").lower()
+                    combined_loc = company_name.lower() + " " + loc_val + " " + addr_val
+
+                    if target_country == "India":
+                        indian_indicators = [
+                            "india", "indian", "mumbai", "bangalore", "bengaluru", "delhi", "noida", 
+                            "gurgaon", "gurugram", "pune", "hyderabad", "chennai", "kolkata", "ahmedabad", 
+                            "gujarat", "maharashtra", "karnataka", "tamil nadu", "tamilnadu", "telangana", 
+                            "haryana", "uttar pradesh", "west bengal", "punjab", "rajasthan", "kerala", 
+                            "madhya pradesh", "bihar", "odisha", "andhra pradesh", "assam", "coimbatore", 
+                            "kochi", "cochin", "mysore", "mysuru", "hubli", "vadodara", "surat", "nagpur", 
+                            "nashik", "aurangabad", "thane", "navi mumbai", "ludhiana", "amritsar", 
+                            "jalandhar", "chandigarh", "mohali", "panchkula", "lucknow", "kanpur", 
+                            "ghaziabad", "meerut", "varanasi", "agra", "allahabad", "prayagraj", "dehradun", 
+                            "haridwar", "jaipur", "jodhpur", "udaipur", "raipur", "bilaspur", "ranchi", 
+                            "jamshedpur", "patna", "bhubaneswar", "cuttack", "guwahati", "shillong", 
+                            "imphal", "itanagar", "dispur", "gangtok", "kohima", "aizawl", "agartala", 
+                            "bhopal", "indore", "gwalior", "jabalpur", "ujjain", "jammu", "srinagar", 
+                            "vijayawada", "visakhapatnam", "vizag", "tirupati", "guntur", "nellore", 
+                            "warangal", "madurai", "tiruchirappalli", "salem", "tiruppur", "vellore", 
+                            "pondicherry", "puducherry", "goa", "panaji", "margao", "daman", "diu"
+                        ]
+                        if not any(ind in combined_loc for ind in indian_indicators):
+                            self.log.info(f"Rejecting company {company_name} because it does not match target country '{target_country}'. Location: {lead_data.get('location')}, Address: {lead_data.get('address')}")
+                            continue
+                    elif target_country == "United States":
+                        us_indicators = [
+                            "usa", "united states", " u.s.", "america", "alaska", "alabama", "arkansas", 
+                            "arizona", "california", "colorado", "connecticut", "delaware", "florida", 
+                            "georgia", "hawaii", "iowa", "idaho", "illinois", "indiana", "kansas", 
+                            "kentucky", "louisiana", "massachusetts", "maryland", "maine", "michigan", 
+                            "minnesota", "missouri", "mississippi", "montana", "north carolina", 
+                            "north dakota", "nebraska", "new hampshire", "new jersey", "new mexico", 
+                            "nevada", "new york", "ohio", "oklahoma", "oregon", "pennsylvania", 
+                            "rhode island", "south carolina", "south dakota", "tennessee", "texas", 
+                            "utah", "virginia", "vermont", "washington", "wisconsin", "west virginia", 
+                            "wyoming", "nyc", "la ", "los angeles", "sf ", "san francisco", "chicago", 
+                            "boston", "seattle", "austin", "dallas", "houston", "miami", "atlanta", 
+                            "denver", "phoenix", "detroit", "philadelphia", "portland", "las vegas"
+                        ]
+                        if not any(ind in combined_loc for ind in us_indicators):
+                            self.log.info(f"Rejecting company {company_name} because it does not match target country '{target_country}'. Location: {lead_data.get('location')}, Address: {lead_data.get('address')}")
+                            continue
 
                 # LinkedIn decision maker enrichment.
                 # Skip if Instantly.ai already pre-filled the DM data —
