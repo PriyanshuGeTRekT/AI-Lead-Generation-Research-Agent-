@@ -71,13 +71,65 @@ def send_lead_review_request(lead: dict) -> bool:
         )
         return True
 
+    # Use pre-built summary if available, else fall back to inline construction
+    summary = lead.get("summary", "")
+    summary_block_text = f"```{summary}```" if summary else (
+        f"*{company_name}*  |  {industry}  |  {location}\n"
+        f"Score: `{score}/10`"
+    )
+
+    key_signals = lead.get("key_signals", [])
+    signals_text = "  ·  ".join(key_signals[:3]) if key_signals else "—"
+
     blocks = [
+        # ── Header ───────────────────────────────────────────────────────────
         {
             "type": "header",
             "text": {
                 "type": "plain_text",
-                "text": f"New Lead Ready for Review: {company_name}",
+                "text": f"New Lead for Review",
                 "emoji": False,
+            },
+        },
+        # ── Lead summary card ────────────────────────────────────────────────
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": summary_block_text,
+            },
+        },
+        {"type": "divider"},
+        # ── Key signals + pain points side-by-side ───────────────────────────
+        {
+            "type": "section",
+            "fields": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Key Signals*\n{signals_text}",
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Pain Points*\n{pain_points_text}",
+                },
+            ],
+        },
+        {"type": "divider"},
+        # ── Email draft preview ──────────────────────────────────────────────
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Outreach Email Preview*\n```{email_preview}```",
+            },
+        },
+        {"type": "divider"},
+        # ── Approve / Reject actions ─────────────────────────────────────────
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "_Review the lead above and approve or reject via the API:_",
             },
         },
         {
@@ -85,54 +137,11 @@ def send_lead_review_request(lead: dict) -> bool:
             "fields": [
                 {
                     "type": "mrkdwn",
-                    "text": f"*Score:* {score}/10",
+                    "text": f"*Approve:*\n`POST {approve_url}`",
                 },
                 {
                     "type": "mrkdwn",
-                    "text": f"*Industry:* {industry}",
-                },
-                {
-                    "type": "mrkdwn",
-                    "text": f"*Location:* {location}",
-                },
-            ],
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*Pain Points:*\n{pain_points_text}",
-            },
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*Email Preview:*\n```{email_preview}```",
-            },
-        },
-        {
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "Approve",
-                        "emoji": False,
-                    },
-                    "style": "primary",
-                    "url": approve_url,
-                },
-                {
-                    "type": "button",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "Reject",
-                        "emoji": False,
-                    },
-                    "style": "danger",
-                    "url": reject_url,
+                    "text": f"*Reject:*\n`POST {reject_url}`",
                 },
             ],
         },

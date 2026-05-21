@@ -19,6 +19,14 @@ from models.schemas import QualificationResult
 
 settings = get_settings()
 
+
+def _score_bar(score: float) -> str:
+    """Return a compact visual score bar, e.g. '████████░░ 8.2'"""
+    filled = round(score)
+    empty = 10 - filled
+    return "█" * filled + "░" * empty
+
+
 QUALIFICATION_PROMPT = """You are a B2B sales qualification expert for an HRMS software company.
 
 Your product knowledge (from our HRMS product, use ONLY this, do not fabricate features):
@@ -96,6 +104,25 @@ class QualificationAgent(BaseAgent):
                 lead["qualification_reason"] = reasoning
                 lead["key_signals"] = result.key_signals
                 lead["recommended_action"] = result.recommended_action
+
+                # Build a clean, human-readable summary for dashboard + Slack display
+                score_bar = _score_bar(score)
+                signals_str = " · ".join(result.key_signals[:3]) if result.key_signals else "—"
+                size_str = lead.get("size") or lead.get("employee_count") or "unknown size"
+                industry_str = lead.get("industry", "company")
+                location_str = lead.get("location", "India")
+                dm_str = lead.get("decision_maker") or (
+                    lead.get("decision_makers", ["Unknown"])[0]
+                    if lead.get("decision_makers") else "Unknown"
+                )
+                lead["summary"] = (
+                    f"{lead.get('company_name', 'Unknown Company')}  |  "
+                    f"{industry_str}  |  {location_str}  |  {size_str}\n"
+                    f"Score: {score:.1f}/10  {score_bar}\n"
+                    f"{reasoning}\n"
+                    f"Key signals: {signals_str}\n"
+                    f"Decision maker: {dm_str}"
+                )
 
                 if score >= settings.qualification_threshold:
                     lead["status"] = "qualified"
