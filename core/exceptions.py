@@ -48,7 +48,7 @@ class RAGLowConfidenceError(RAGError):
 # ── Web / Research Errors ─────────────────────────────────────────────────────
 
 class WebSearchError(LeadGenBaseError):
-    """DuckDuckGo search failed or returned no results."""
+    """Web search (Serper.dev / fallback dataset) failed or returned no results."""
 
 class ScrapingError(LeadGenBaseError):
     """Company website scraping failed."""

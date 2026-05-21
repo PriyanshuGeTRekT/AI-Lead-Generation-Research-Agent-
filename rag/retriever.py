@@ -62,6 +62,11 @@ def retrieve_hrms_context(company_description: str) -> str:
     """
     Retrieve HRMS-specific context relevant to a prospect company.
     Used by qualification and sales agents.
+
+    Bug fix: was hardcoded to top_k=3, ignoring settings.rag_top_k (default 4).
+    Now reads from config so it can be tuned without a code change.
     """
+    from core.config import get_settings
+    top_k = get_settings().rag_top_k
     query = f"HRMS features benefits for company: {company_description}"
-    return retrieve(query, top_k=3)
+    return retrieve(query, top_k=top_k)

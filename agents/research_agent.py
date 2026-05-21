@@ -75,13 +75,12 @@ class ResearchAgent(BaseAgent):
         self.log.info(f"Found {len(search_results)} search results")
         new_leads = []
 
-        # Filter out social media/directory URLs first, then cap at max_leads_per_run.
-        # Filtering after slicing meant a run could process 0 valid companies if
-        # the top N results were all LinkedIn/Facebook pages.
-        SKIP_DOMAINS = ["linkedin.com", "facebook.com", "twitter.com", "instagram.com", "youtube.com"]
+        # Cap results at max_leads_per_run. Domain filtering already handled upstream
+        # by _BLOCKED_DOMAINS in tools/web_search.py (Serper path) and the
+        # search_companies_multi_source dedup step. A redundant SKIP_DOMAINS list
+        # here was removed to avoid maintaining two copies of the same allowlist.
         valid_results = [
-            r for r in search_results
-            if r.get("url") and not any(skip in r["url"] for skip in SKIP_DOMAINS)
+            r for r in search_results if r.get("url")
         ][:settings.max_leads_per_run]
 
         for result in valid_results:

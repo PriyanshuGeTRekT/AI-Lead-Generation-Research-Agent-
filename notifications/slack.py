@@ -125,23 +125,27 @@ def send_lead_review_request(lead: dict) -> bool:
         },
         {"type": "divider"},
         # ── Approve / Reject actions ─────────────────────────────────────────
+        # Bug fix: previously showed POST URLs as code snippets, which required
+        # the reviewer to copy/paste them into a terminal. Now uses Slack's
+        # actions block with button elements that open the GET URL directly.
+        # GET /leads/{id}/approve and GET /leads/{id}/reject are supported
+        # endpoints (added specifically for this Slack button pattern).
         {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": "_Review the lead above and approve or reject via the API:_",
-            },
-        },
-        {
-            "type": "section",
-            "fields": [
+            "type": "actions",
+            "elements": [
                 {
-                    "type": "mrkdwn",
-                    "text": f"*Approve:*\n`POST {approve_url}`",
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "✅ Approve", "emoji": True},
+                    "style": "primary",
+                    "url": approve_url,
+                    "action_id": f"approve_{lead_id}",
                 },
                 {
-                    "type": "mrkdwn",
-                    "text": f"*Reject:*\n`POST {reject_url}`",
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "❌ Reject", "emoji": True},
+                    "style": "danger",
+                    "url": reject_url,
+                    "action_id": f"reject_{lead_id}",
                 },
             ],
         },

@@ -91,7 +91,7 @@ def run_pipeline(keyword: str) -> LeadState:
         "keyword": keyword,
         "leads": [],
         "messages": [],
-        "next": "qualify",
+        "next": "research",   # intent marker only — LangGraph routes to set_entry_point first
         "iteration": 0,
         "errors": [],
         "correlation_id": correlation_id,

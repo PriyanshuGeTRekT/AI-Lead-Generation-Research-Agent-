@@ -75,6 +75,8 @@ class BaseAgent(ABC):
         max_tokens: int = None,
         use_cache: bool = True,
     ) -> str:
+        # Bug fix: `temperature or default` is falsy when temperature=0.0, which is a
+        # valid value (maximally deterministic). Use explicit None check instead.
         """
         LLM call with:
           - Redis caching (skip duplicate calls for same company)
@@ -86,8 +88,8 @@ class BaseAgent(ABC):
         LLM run nested under the parent LangGraph pipeline run, showing
         the full prompt, response, token usage, and latency.
         """
-        temperature = temperature or settings.llm_temperature_extract
-        max_tokens = max_tokens or settings.llm_max_tokens_extract
+        temperature = temperature if temperature is not None else settings.llm_temperature_extract
+        max_tokens = max_tokens if max_tokens is not None else settings.llm_max_tokens_extract
 
         # Check cache first. Hash the FULL prompt to distinguish per-company calls.
         # Bug fix: prompt[:200] was always the static preamble, causing cache collisions
@@ -146,6 +148,7 @@ class BaseAgent(ABC):
         schema: type,
         temperature: float = None,
         max_tokens: int = None,
+        use_cache: bool = True,
     ) -> object:
         """
         LLM call enforcing a Pydantic schema via .with_structured_output().
@@ -158,13 +161,17 @@ class BaseAgent(ABC):
         Falls back to call_llm() + parse_json_response() + manual model construction
         if structured output fails. This ensures the agent never hard-fails due to
         a schema enforcement issue.
+
+        Bug fix: removed `if True:` placeholder — added proper `use_cache` parameter
+        so callers can opt out of caching (e.g. when schema output must be unique).
+        Also fixed `temperature or default` falsy bug (temperature=0.0 is valid).
         """
-        temperature = temperature or settings.llm_temperature_extract
-        max_tokens = max_tokens or settings.llm_max_tokens_extract
+        temperature = temperature if temperature is not None else settings.llm_temperature_extract
+        max_tokens = max_tokens if max_tokens is not None else settings.llm_max_tokens_extract
 
         # Cache key based on schema name + prompt
         ck = cache_key("llm_structured", self.name, schema.__name__, prompt, str(temperature))
-        if True:  # caching enabled
+        if use_cache:
             cached = get_cached(ck)
             if cached:
                 self.log.debug(f"Structured LLM cache hit (key: {ck[:16]})")

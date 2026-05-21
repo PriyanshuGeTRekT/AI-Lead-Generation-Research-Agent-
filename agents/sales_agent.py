@@ -7,7 +7,6 @@ Uses RAG to ensure product claims are grounded in real HumanMaximizer content.
 Extends BaseAgent for retry, caching, structured logging, hallucination guard.
 """
 import json
-import os
 from graph.state import LeadState
 from agents.base import BaseAgent
 from notifications.slack import send_lead_review_request
@@ -106,7 +105,9 @@ class SalesAgent(BaseAgent):
                 }
 
                 # Human-in-the-loop: if Slack is configured, hold for review
-                if os.getenv("SLACK_WEBHOOK_URL"):
+                # Bug fix: use settings.slack_webhook_url (loaded from .env at startup)
+                # instead of os.getenv at call time — keeps config in one place.
+                if settings.slack_webhook_url:
                     # Set to pending_review instead of outreach_ready
                     lead["status"] = "pending_review"
                     send_lead_review_request(lead)

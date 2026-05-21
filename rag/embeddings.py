@@ -9,9 +9,14 @@ from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
 from loguru import logger
 
-CHROMA_PATH = os.getenv("CHROMA_PATH", "./data/chroma_db")
-COLLECTION_NAME = "hrms_knowledge"
-EMBED_MODEL = "all-MiniLM-L6-v2"  # Fast, lightweight, 384-dim embeddings
+# Bug fix: was reading CHROMA_PATH directly from os.getenv, bypassing Pydantic
+# settings validation and the central config. Now reads from config singleton,
+# which already handles env var loading + defaults consistently.
+# os import kept for other uses in this module.
+from core.config import get_settings as _get_settings
+CHROMA_PATH = _get_settings().chroma_path
+COLLECTION_NAME = _get_settings().collection_name
+EMBED_MODEL = _get_settings().embed_model
 
 # Singletons (avoid reloading on every call)
 _model = None
