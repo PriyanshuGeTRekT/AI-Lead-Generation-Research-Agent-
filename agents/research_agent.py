@@ -69,7 +69,12 @@ class ResearchAgent(BaseAgent):
         correlation_id = state.get("correlation_id", self.correlation_id)
         self.log.info(f"Starting search for keyword: '{keyword}'")
 
-        search_results = search_companies_multi_source(keyword, max_results=settings.max_leads_per_run * 2)
+        # Determine cap before searching so we don't over-fetch
+        run_cap = state.get("max_leads") or settings.max_leads_per_run
+        # Fetch 4× more candidates than needed to cover scraping failures and
+        # LLM-invalid results, but no more — keeps search fast for small runs
+        search_limit = max(run_cap * 4, 20)
+        search_results = search_companies_multi_source(keyword, max_results=search_limit)
 
         if not search_results:
             self.log.warning("Web search returned no results")
@@ -83,16 +88,14 @@ class ResearchAgent(BaseAgent):
         self.log.info(f"Found {len(search_results)} search results")
         new_leads = []
 
-        # Use per-run max_leads if provided in state, else fall back to config.
-        run_cap = state.get("max_leads") or settings.max_leads_per_run
-        # Try 5× more URLs than requested (min 15) to absorb scraping failures,
-        # LLM-invalid results, and dedup skips — stop collecting once run_cap is hit.
-        trial_size = max(run_cap * 5, 15)
-        valid_results = [r for r in search_results if r.get("url")][:trial_size]
+        # Try every available URL — no artificial ceiling.
+        # The break below stops as soon as run_cap good leads are collected,
+        # so asking for 1 lead stops after the first valid company is found.
+        valid_results = [r for r in search_results if r.get("url")]
         self.log.info(f"Processing up to {len(valid_results)} candidates (target={run_cap})")
 
         for result in valid_results:
-            # Stop early once we've collected enough good leads
+            # Stop the moment we have enough leads
             if len(new_leads) >= run_cap:
                 self.log.info(f"Reached target of {run_cap} leads, stopping early")
                 break
