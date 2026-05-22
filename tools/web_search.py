@@ -22,9 +22,30 @@ from core.config import get_settings as _get_settings
 
 # ── Contact extraction helpers ─────────────────────────────────────────────────
 
-_EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+# Email regex: strict TLD allowlist, rejects image/asset extensions and bad local parts
+_EMAIL_RE = re.compile(
+    r"(?<![/&#])"                          # not preceded by path/hash/entity chars
+    r"([a-zA-Z0-9][a-zA-Z0-9._%+\-]{0,62}[a-zA-Z0-9])"  # local part, max 64 chars, no leading dot
+    r"@"
+    r"([a-zA-Z0-9][a-zA-Z0-9.\-]{0,253})"  # domain
+    r"\.(com|in|org|net|co\.in|io|biz|info|edu|gov|ac\.in|nic\.in|mil|int|mobi|name|pro|travel|coop|museum)"
+    r"(?=[^a-zA-Z0-9]|$)"                  # must end at non-alnum or end-of-string
+)
+# Reject file extension TLDs that look like emails (images, scripts, etc.)
+_REJECT_EMAIL_TLDS = re.compile(
+    r"\.(png|jpg|jpeg|gif|svg|webp|ico|css|js|ts|woff|woff2|ttf|eot|pdf|zip|tar|gz|map)$",
+    re.IGNORECASE
+)
+# Phone: strict Indian mobile (10 digits starting with 6-9) or landline (STD + subscriber)
 _PHONE_RE = re.compile(
-    r"(?:\+91[\s\-]?)?(?:\(?0?\d{2,4}\)?[\s\-]?)?\d{5}[\s\-]?\d{5}"
+    r"(?<!\d)"                              # not preceded by a digit (word boundary)
+    r"(?:"
+        r"(?:\+91[\s\-]?)?([6-9]\d{9})"    # mobile: optional +91, then 10 digits starting 6-9
+        r"|"
+        r"(?:0(\d{2,4})[\s\-]?(\d{6,8}))"  # landline: 0 + STD(2-4) + subscriber(6-8), total 10-11 digits
+    r")"
+    r"(?!\d)",                              # not followed by a digit
+    re.ASCII,
 )
 _SKIP_EMAIL_DOMAINS = {
     "gmail.com", "yahoo.com", "hotmail.com", "outlook.com",
@@ -73,22 +94,105 @@ def _validate_address(text: str) -> str:
 
 
 def extract_emails(text: str) -> List[str]:
-    """Extract unique business email addresses from raw text."""
-    found = _EMAIL_RE.findall(text)
-    seen = []
-    for e in found:
-        e = e.lower().strip(".")
-        domain = e.split("@")[-1]
-        if domain not in _SKIP_EMAIL_DOMAINS and e not in seen:
-            seen.append(e)
-    return seen[:5]
+    """Extract unique business email addresses from raw text.
+
+    Improvements over naive regex:
+    - Requires a real TLD (com/in/org/net/co.in/io/…); rejects image/asset extensions
+    - Rejects local parts containing path separators or # characters
+    - Rejects local parts longer than 64 characters
+    - Rejects local parts that look like version strings (digits.digits@…)
+    - Case-insensitive deduplication; returns at most 5 results
+    """
+    seen_lower: set = set()
+    results: List[str] = []
+
+    for match in _EMAIL_RE.finditer(text):
+        local = match.group(1)
+        domain_part = match.group(2)
+        tld = match.group(3)
+        full = f"{local}@{domain_part}.{tld}".lower().strip(".")
+
+        # Reject if local part contains path or hash chars
+        if re.search(r"[/#]", local):
+            continue
+        # Reject if local part is too long
+        if len(local) > 64:
+            continue
+        # Reject version-string locals like "1.0" or "2.3.1"
+        if re.fullmatch(r"\d+(\.\d+)+", local):
+            continue
+        # Reject asset/file TLDs that slipped through (belt-and-suspenders)
+        if _REJECT_EMAIL_TLDS.search(f".{tld}"):
+            continue
+        # Skip generic/free/test domains
+        full_domain = f"{domain_part}.{tld}".lower()
+        if full_domain in _SKIP_EMAIL_DOMAINS:
+            continue
+        # Deduplicate case-insensitively
+        if full in seen_lower:
+            continue
+
+        seen_lower.add(full)
+        results.append(full)
+        if len(results) >= 5:
+            break
+
+    return results
+
+
+def _validate_phone(number: str) -> str:
+    """Return the phone number string if valid, else empty string.
+
+    Rejects:
+    - All-same-digit numbers (e.g. 9999999999)
+    - 4-digit sequences that look like years (starting with 19xx or 20xx)
+    - Known fake/test numbers
+    """
+    digits_only = re.sub(r"\D", "", number)
+    if not digits_only:
+        return ""
+    # Strip leading country code for validation
+    core = digits_only.lstrip("91") if digits_only.startswith("91") and len(digits_only) > 10 else digits_only
+    # Reject year-like 4-digit numbers (shouldn't reach here but belt-and-suspenders)
+    if len(core) == 4 and re.match(r"(?:19|20)\d{2}$", core):
+        return ""
+    # Reject all-same-digit numbers
+    if len(set(core)) == 1:
+        return ""
+    # Reject known fake/test numbers
+    _FAKE_NUMBERS = {"1234567890", "0000000000", "9999999999", "1111111111"}
+    if core in _FAKE_NUMBERS:
+        return ""
+    return number
 
 
 def extract_phone(text: str) -> str:
-    """Extract first plausible Indian phone number from text."""
-    match = _PHONE_RE.search(text)
-    if match:
-        return re.sub(r"[\s\-]+", "-", match.group()).strip()
+    """Extract first plausible Indian phone number from text.
+
+    Uses a strict regex that:
+    - Matches 10-digit mobiles starting with 6, 7, 8, or 9 (with optional +91 prefix)
+    - Matches landlines: STD code starting with 0 (2-4 digits) + 6-8 digit subscriber number
+    - Enforces non-digit boundaries so random digit sequences are not matched
+    - Normalizes mobile numbers to +91-XXXXXXXXXX format
+    """
+    for match in _PHONE_RE.finditer(text):
+        mobile = match.group(1)
+        std = match.group(2)
+        subscriber = match.group(3)
+
+        if mobile:
+            # Mobile number
+            normalized = f"+91-{mobile}"
+            validated = _validate_phone(normalized)
+            if validated:
+                return validated
+        elif std and subscriber:
+            # Landline
+            raw = f"0{std}-{subscriber}"
+            validated = _validate_phone(raw)
+            if validated:
+                return validated
+
     return ""
 
 
@@ -106,9 +210,29 @@ _INDIA_CITIES = [
 ]
 
 _SIZE_SIGNALS = [
-    "500 employees", "1000 employees", "2000 employees",
-    "300 employees", "5000 employees", "800 employees",
+    "200 employees", "500 employees", "300 employees",
+    "800 employees", "1000 employees", "2000 employees",
 ]
+
+
+def _extract_target_size(keyword: str) -> int:
+    """Extract employee count target from keyword, e.g. '200 employees' → 200."""
+    m = re.search(r"\b(\d{2,5})\s*(?:employees?|staff|workers?|people)\b", keyword, re.I)
+    return int(m.group(1)) if m else 0
+
+
+def _size_range_signals(target: int) -> List[str]:
+    """Return size signals appropriate for the target employee count."""
+    if target <= 0:
+        return _SIZE_SIGNALS
+    lo = max(50, target // 2)
+    hi = target * 3
+    return [
+        f"{target} employees",
+        f"{lo}-{hi} employees",
+        f"SME {target} staff",
+        f"mid-size company {target} employees",
+    ]
 
 # Industry-specific sub-query terms so we don't always search the same broad phrase
 _INDUSTRY_VARIANTS: Dict[str, List[str]] = {
@@ -215,6 +339,9 @@ def _generate_query_variants(keyword: str, count: int = 12) -> List[str]:
     ).strip()
     core = re.sub(r"\s+", " ", core).strip() or keyword.split()[0]
 
+    target_size = _extract_target_size(keyword)
+    size_signals = _size_range_signals(target_size)
+
     variants: List[str] = [keyword]  # Original always first
 
     cities = random.sample(_INDIA_CITIES, min(len(_INDIA_CITIES), count + 5))
@@ -223,15 +350,22 @@ def _generate_query_variants(keyword: str, count: int = 12) -> List[str]:
     pool: List[str] = []
     for i, city in enumerate(cities):
         sub = subs[i % len(subs)] if subs else core
-        size = _SIZE_SIGNALS[i % len(_SIZE_SIGNALS)]
-        pool.append(f"{sub} {city} India {size} official website")
+        size = size_signals[i % len(size_signals)]
+        # Use .in domain hint to find Indian companies, not global multinationals
+        pool.append(f"{sub} {city} India {size} site:.in OR site:.com")
 
-    # Pure industry-sub variants (no city) to catch national-level results
+    # SME/mid-size specific variants — avoids returning Fortune 500 companies
     for sub in subs[:4]:
-        pool.append(f"{sub} India 500 employees HR")
+        size = size_signals[0]
+        pool.append(f"Indian {sub} {size} HR manager")
+        pool.append(f"{sub} India private limited {size}")
 
-    # General mid-size signal
-    pool.append(f"mid-size {core} company India 200-1000 employees")
+    # General mid-size signal with Indian context
+    if target_size > 0:
+        pool.append(f"Indian SME {core} company {target_size} employees")
+        pool.append(f'"{core}" India "employees" -multinational -global')
+    else:
+        pool.append(f"mid-size {core} company India")
 
     random.shuffle(pool)
 

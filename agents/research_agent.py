@@ -11,6 +11,7 @@ Extends BaseAgent for:
   - Consistent JSON parsing
 """
 import json
+import re
 import uuid
 from graph.state import LeadState
 from agents.base import BaseAgent
@@ -30,10 +31,14 @@ IMPORTANT: Extract ONLY companies that BUY or USE HR software (manufacturers, re
 logistics companies, hospitals, schools, startups, etc.). Do NOT extract companies that SELL
 HR/payroll/HRMS software — those are competitors, not prospects.
 
-Search Results:
+CRITICAL ACCURACY RULE: You MUST extract data ONLY from the "Scraped Website Content" section below.
+Do NOT infer, guess, hallucinate, or fill fields from general knowledge or from the Search Results snippet.
+The Search Results are provided only to identify the company URL and name — NOT as a source for extracted fields.
+
+Search Results (for URL/name identification only — do NOT extract field values from here):
 {search_results}
 
-Scraped Website Content:
+Scraped Website Content (PRIMARY SOURCE — extract all fields from here only):
 {scraped_content}
 
 Address Search Snippets (Google):
@@ -44,20 +49,22 @@ Extract lead information and respond with a JSON object ONLY (no explanation):
   "company_name": "...",
   "website": "...",
   "industry": "...(their actual business, NOT 'HRMS software')",
-  "size": "...(e.g. 200 employees, 500+ staff — look for headcount mentions)",
-  "location": "...(city and state if found, e.g. Mumbai, Maharashtra)",
+  "size": "...(ONLY state employee count if it is explicitly mentioned as a number in the Scraped Website Content, e.g. '200 employees'. If not explicitly mentioned, return empty string)",
+  "location": "...(city and state if found in Scraped Website Content, e.g. Mumbai, Maharashtra)",
   "address": "...(physical office address if mentioned, else empty string)",
-  "description": "...(what the company does, 2-3 sentences)",
-  "decision_makers": ["...(names or titles like HR Manager, CEO found on site)"],
-  "contact_emails": ["...(any business email addresses found on the site)"],
-  "pain_points": ["...(likely HR challenges they face based on their industry/size)"],
+  "description": "...(what the company does, 2-3 sentences, based only on Scraped Website Content)",
+  "decision_makers": ["...(ONLY names or job titles you can literally see on the page in the Scraped Website Content. Do NOT make up or infer titles. If none found, return [])"],
+  "contact_emails": ["...(ONLY email addresses you can see as text in the Scraped Website Content. Do NOT guess or construct email addresses. If none visible, return [])"],
+  "pain_points": ["...(Based ONLY on their industry and what their website says about their business. Do NOT guess generically.)"],
   "status": "researched"
 }}
 
 Rules:
-- contact_emails: list every email address you can find in the content (look for @domain patterns)
+- contact_emails: ONLY list emails you can see as literal text in the Scraped Website Content. Do NOT construct, guess, or infer emails. If none are visible in the content, return [].
+- size: ONLY state employee count if it is explicitly mentioned as a number in the Scraped Website Content. Otherwise return empty string.
+- phone: ONLY return a phone number if it appears literally in the Scraped Website Content. Do NOT infer.
 - address: copy any physical office address found verbatim. Check the "Address Search Snippets (Google)" section for the physical address. If not found in the scraped content, prioritize the physical office address found in the Google Address Search Snippets!
-- decision_makers: include names if found, else job titles (HR Manager, CEO, etc.)
+- decision_makers: ONLY include names or titles you can literally see on the page. Do NOT make up or infer titles. If none found, return [].
 - If this company sells HRMS/payroll/HR software itself, return: {{"status": "invalid"}}
 - If you cannot extract valid company info, return: {{"status": "invalid"}}
 - CRITICAL REGIONAL RULE: If the target keyword specifies a country (e.g., "India"), you MUST verify that the company is actually located in, has a major office in, or operates significantly in that country. If it is located in a completely different country/region (for example, a USA-only company when the keyword specifies "India"), you MUST return: {{"status": "invalid"}}
@@ -87,6 +94,14 @@ class ResearchAgent(BaseAgent):
 
         if target_country:
             self.log.info(f"Target country constraint detected: '{target_country}'")
+
+        # Target size detection — extract employee count from keyword
+        # e.g. "manufacturing company India 200 employees" → target_size = 200
+        target_size = 0
+        _size_match = re.search(r"\b(\d{2,5})\s*(?:employees?|staff|workers?|people)\b", keyword, re.I)
+        if _size_match:
+            target_size = int(_size_match.group(1))
+            self.log.info(f"Target size constraint detected: ~{target_size} employees")
 
         # Determine cap before searching so we don't over-fetch
         run_cap = state.get("max_leads") or settings.max_leads_per_run
@@ -239,6 +254,22 @@ class ResearchAgent(BaseAgent):
                         ]
                         if not any(ind in combined_loc for ind in us_indicators):
                             self.log.info(f"Rejecting company {company_name} because it does not match target country '{target_country}'. Location: {lead_data.get('location')}, Address: {lead_data.get('address')}")
+                            continue
+
+                # Size filtering — reject if company is massively larger than the target
+                # e.g. keyword="200 employees" should not accept a 170,000-employee company
+                if target_size > 0:
+                    size_str = (lead_data.get("size") or "").lower().replace(",", "")
+                    extracted_size_match = re.search(r"(\d+)", size_str)
+                    if extracted_size_match:
+                        extracted_size = int(extracted_size_match.group(1))
+                        # Reject if extracted size is more than 20x the target
+                        # (allows variance: target=200, accept up to 4000; rejects Boeing at 171k)
+                        if extracted_size > target_size * 20:
+                            self.log.info(
+                                f"Rejecting {company_name}: size mismatch "
+                                f"(extracted={extracted_size}, target={target_size})"
+                            )
                             continue
 
                 # LinkedIn decision maker enrichment.

@@ -782,9 +782,9 @@ function renderStats() {
   const ready   = currentLeads.filter(l => l.status === 'outreach_ready').length;
   const pending = currentLeads.filter(l => l.status === 'pending_review').length;
   const disq    = currentLeads.filter(l => l.status === 'disqualified').length;
-  const contact = currentLeads.filter(l => (l.contact_emails||[]).length > 0 || l.phone).length;
-  const dm      = currentLeads.filter(l => l.decision_maker_name).length;
-  const seq     = currentLeads.filter(l => l.follow_up_sequence?.length > 0).length;
+  const contact = currentLeads.filter(l => (l.contact_emails||[]).length > 0 || (l.phone && l.phone.trim())).length;
+  const dm      = currentLeads.filter(l => l.decision_maker_full_name || l.decision_maker_name).length;
+  const seq     = currentLeads.filter(l => l.outreach_draft?.email_body || l.follow_up_sequence?.length > 0).length;
   const scores  = currentLeads.map(l => l.qualification_score).filter(s => s != null);
   const avg     = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
 
@@ -897,51 +897,69 @@ function buildCard(lead, idx) {
   /* ── Decision maker ── */
   const dmName     = lead.decision_maker_full_name || lead.decision_maker_name || '';
   const dmTitle    = lead.decision_maker_title || '';
-  const dmLinkedin = lead.decision_maker_linkedin || '';
-  const dmInitials = dmName ? dmName.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase() : '';
-  const dmBlock = dmName ? `
+  // Only show LinkedIn link if it's a real URL
+  const dmLinkedinRaw = lead.decision_maker_linkedin || '';
+  const dmLinkedin = dmLinkedinRaw.startsWith('http') ? dmLinkedinRaw : '';
+  const dmInitials = dmName ? dmName.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase() : '?';
+  const dmBlock = `
     <div class="card-section">
       <div class="card-section-label">Decision Maker</div>
       <div class="dm-row">
-        <div class="dm-avatar">${escHtml(dmInitials)}</div>
+        <div class="dm-avatar">${dmName ? escHtml(dmInitials) : '?'}</div>
         <div class="dm-info">
-          <div class="dm-name">${escHtml(dmName)}</div>
+          <div class="dm-name">${dmName ? escHtml(dmName) : '<span style="color:var(--muted);font-style:italic">Not identified</span>'}</div>
           ${dmTitle ? `<div class="dm-title">${escHtml(dmTitle)}</div>` : ''}
         </div>
         ${dmLinkedin ? `<a class="dm-linkedin" href="${escAttr(dmLinkedin)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}
       </div>
-    </div>` : '';
+    </div>`;
 
   /* ── Contact info with email quality indicators ── */
-  const verified   = lead.verified_emails || [];
-  const qualityMap = {};
-  verified.forEach(v => { qualityMap[v.email] = v.quality; });
+  // Build a set of MX-verified email addresses for quick lookup
+  const verifiedEmails = lead.verified_emails || [];
+  const verifiedSet = new Set();
+  verifiedEmails.forEach(v => {
+    // verified_emails may be an array of objects {email, quality} or plain strings
+    if (typeof v === 'string') verifiedSet.add(v);
+    else if (v && v.email) verifiedSet.add(v.email);
+  });
 
+  // Only show emails from lead.contact_emails — not from email_guesses
   const emails = (lead.contact_emails || []).filter(Boolean);
-  const emailChips = emails.map(e => {
-    const q = qualityMap[e] || 'medium';
-    const qIcon = q === 'high' ? '✓' : q === 'medium' ? '~' : '–';
-    const qClass = `q-${q}`;
-    return `<span class="email-chip"><a href="mailto:${escAttr(e)}">${escHtml(e)}</a><span class="${qClass}" title="Quality: ${q}">${qIcon}</span></span>`;
-  }).join('');
+  let emailChips = '';
+  if (emails.length) {
+    emailChips = emails.map(e => {
+      const isVerified = verifiedSet.has(e);
+      const icon  = isVerified ? '✓' : '✉';
+      const cls   = isVerified ? 'q-high' : 'q-medium';
+      const title = isVerified ? 'MX verified' : 'Unverified';
+      return `<span class="email-chip"><a href="mailto:${escAttr(e)}">${escHtml(e)}</a><span class="${cls}" title="${title}">${icon}</span></span>`;
+    }).join('');
+  } else {
+    emailChips = `<span style="font-size:.72rem;color:var(--muted);font-style:italic">No email found</span>`;
+  }
 
-  const phoneHtml = lead.phone
+  // Phone: only show if non-empty
+  const phoneHtml = (lead.phone && lead.phone.trim())
     ? `<div class="contact-item"><span class="contact-icon">📞</span><a href="tel:${escAttr(lead.phone)}" style="color:var(--teal);text-decoration:none;font-size:.74rem">${escHtml(lead.phone)}</a></div>`
     : '';
-  const addressHtml = lead.address
-    ? `<div class="contact-item"><span class="contact-icon">🏢</span><span style="color:var(--muted);font-size:.73rem">${escHtml(lead.address)}</span></div>`
+
+  // Address: only show if non-empty and not "unknown"
+  const addressRaw = (lead.address || '').trim();
+  const addressHtml = (addressRaw && addressRaw.toLowerCase() !== 'unknown')
+    ? `<div class="contact-item"><span class="contact-icon">🏢</span><span style="color:var(--muted);font-size:.73rem">${escHtml(addressRaw)}</span></div>`
     : '';
 
-  const hasContact = emailChips || phoneHtml || addressHtml;
-  const contactBlock = hasContact ? `
+  // Always show Contact Info section (at minimum "No email found")
+  const contactBlock = `
     <div class="card-section">
-      <div class="card-section-label">Contact Info ${verified.length ? `<span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(✓ = verified MX · ~ = unverified)</span>` : ''}</div>
+      <div class="card-section-label">Contact Info ${verifiedSet.size ? `<span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(✓ = verified MX)</span>` : ''}</div>
       <div class="contact-row">
-        ${emailChips ? `<div class="contact-item"><span class="contact-icon">✉</span><div class="contact-emails-wrap">${emailChips}</div></div>` : ''}
+        <div class="contact-item"><span class="contact-icon">✉</span><div class="contact-emails-wrap">${emailChips}</div></div>
         ${phoneHtml}
         ${addressHtml}
       </div>
-    </div>` : '';
+    </div>`;
 
   /* ── Tech stack + pitch angle ── */
   const techBlock = tech.maturity ? `
@@ -1033,7 +1051,27 @@ function buildCard(lead, idx) {
   /* ── Review actions ── */
   let reviewActions = '';
   if (lead.status === 'pending_review' && lead.id) {
+    // Build a collapsed email preview so reviewers can see what they're approving
+    let pendingEmailPreview = '';
+    const previewDraft = lead.outreach_draft;
+    if (previewDraft?.email_body) {
+      const previewSubject = previewDraft.subject || '(no subject)';
+      // Show first 3 lines of body
+      const bodyLines = (previewDraft.email_body || '').split('\n').filter(l => l.trim()).slice(0, 3);
+      const previewBody = bodyLines.join('\n') + (previewDraft.email_body.split('\n').filter(l => l.trim()).length > 3 ? '\n…' : '');
+      pendingEmailPreview = `
+        <details style="border-top:1px solid var(--border);margin:0">
+          <summary style="padding:8px 14px;font-size:.74rem;font-weight:600;color:var(--muted);cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px">
+            <span style="color:var(--teal)">▶</span> Preview Day 1 Email
+          </summary>
+          <div style="padding:0 14px 10px;display:flex;flex-direction:column;gap:6px">
+            <div style="font-size:.72rem;font-weight:600;color:var(--white)">Subject: <span style="font-weight:400;color:var(--muted)">${escHtml(previewSubject)}</span></div>
+            <div style="font-size:.71rem;color:var(--muted);line-height:1.6;white-space:pre-wrap;background:var(--navy-lite);border:1px solid var(--border);border-radius:5px;padding:8px 10px;max-height:100px;overflow:hidden">${escHtml(previewBody)}</div>
+          </div>
+        </details>`;
+    }
     reviewActions = `
+      ${pendingEmailPreview}
       <div class="review-actions">
         <button class="btn-approve" id="abtn-${lead.id}" onclick="approveLead('${lead.id}',this,document.getElementById('rbtn-${lead.id}'))">✓ Approve → CRM</button>
         <button class="btn-reject"  id="rbtn-${lead.id}" onclick="rejectLead('${lead.id}',document.getElementById('abtn-${lead.id}'),this)">✗ Reject</button>
@@ -1131,17 +1169,22 @@ function fmtMs(ms) {
 async function loadExistingLeads() {
   try {
     const d = await fetch(`${API}/leads`).then(r => r.json());
-    if (d.leads?.length) {
-      currentLeads = d.leads;
+    const leads = d.leads || [];
+    if (leads.length) {
+      currentLeads = leads;
       // Register all existing leads so a new run won't re-show them
       currentLeads.forEach(l => {
         const key = l.id || l.company_name;
         if (key) knownLeadIds.add(key);
       });
-      renderStats(); renderLeads();
-      appendLog(`› Loaded ${d.total} leads from all previous runs`);
+      appendLog(`› Loaded ${d.total ?? leads.length} leads from all previous runs`);
     }
-  } catch {}
+  } catch(e) {
+    appendLog('⚠ Could not load existing leads', 'warn');
+  }
+  // Always update stats and leads grid after load (even if empty)
+  renderStats();
+  renderLeads();
 }
 
 checkHealth();
