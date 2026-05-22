@@ -1068,51 +1068,71 @@ def scrape_company_contacts(url: str) -> Dict:
 
 def search_company_address_snippets(company_name: str, country: str = "") -> str:
     """
-    Search Google for the office address of a company and return raw search snippets.
-    Helpful for grounding physical address extraction.
+    Search Google for the registered/corporate office address of a company.
+    Uses two targeted queries:
+      1. Knowledge Graph lookup — most reliable (structured Google data)
+      2. 'registered office' query — finds MCA/company filings snippets
+    Organic results are NOT included to avoid picking up other companies' addresses.
     """
     if not SERPER_API_KEY:
         return "No address search results available (missing API key)."
 
-    if country:
-        query = f"{company_name} {country} office address location"
-    else:
-        query = f"{company_name} office address location"
+    country_str = country or "India"
+    # Query 1: general address lookup — triggers Knowledge Graph for well-known companies
+    q1 = f'"{company_name}" {country_str} headquarters address'
+    # Query 2: registered office — works well for Indian companies (MCA filings)
+    q2 = f'"{company_name}" registered office address {country_str}'
 
-    try:
-        resp = requests.post(
-            "https://google.serper.dev/search",
-            headers={"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"},
-            json={"q": query, "num": 5, "gl": "in", "hl": "en"},
-            timeout=8,
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    snippets = []
 
-        snippets = []
+    for query in [q1, q2]:
+        try:
+            resp = requests.post(
+                "https://google.serper.dev/search",
+                headers={"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"},
+                json={"q": query, "num": 5, "gl": "in", "hl": "en"},
+                timeout=8,
+            )
+            resp.raise_for_status()
+            data = resp.json()
 
-        # 1. Check knowledge graph
-        kg = data.get("knowledgeGraph") or {}
-        kg_title = kg.get("title", "")
-        attributes = kg.get("attributes") or {}
-        kg_address = attributes.get("Address") or attributes.get("address") or attributes.get("Headquarters") or attributes.get("headquarters")
-        if kg_address:
-            snippets.append(f"Google Knowledge Graph Address for {kg_title or company_name}: {kg_address}")
+            # 1. Knowledge Graph — highest confidence, structured data from Google
+            kg = data.get("knowledgeGraph") or {}
+            kg_title = kg.get("title", "")
+            attributes = kg.get("attributes") or {}
+            kg_address = (
+                attributes.get("Address")
+                or attributes.get("address")
+                or attributes.get("Headquarters")
+                or attributes.get("headquarters")
+            )
+            if kg_address:
+                snippets.append(f"Google Knowledge Graph Address for {kg_title or company_name}: {kg_address}")
 
-        # 2. Check answer box
-        ab = data.get("answerBox") or {}
-        ab_address = ab.get("answer") or ab.get("snippet")
-        if ab_address:
-            snippets.append(f"Google Direct Answer: {ab_address}")
+            # 2. Answer box — Google's direct answer panel
+            ab = data.get("answerBox") or {}
+            ab_text = ab.get("answer") or ab.get("snippet") or ""
+            if ab_text and any(k in ab_text.lower() for k in ["street", "road", "nagar", "plot", "sector", "floor", "building", "house", "block", "industrial"]):
+                snippets.append(f"Google Direct Answer: {ab_text}")
 
-        # 3. Organic results
-        for r in data.get("organic", []):
-            title = r.get("title", "")
-            snippet = r.get("snippet", "")
-            snippets.append(f"- {title}: {snippet}")
+            # 3. Sitelinks snippets from the company's own domain only
+            company_domain_hint = company_name.lower().replace(" ", "").replace(".", "")[:12]
+            for r in data.get("organic", [])[:5]:
+                link = r.get("link", "").lower()
+                snippet = r.get("snippet", "")
+                # Only trust snippets from the company's own website
+                if company_domain_hint in link and any(
+                    k in snippet.lower() for k in ["registered office", "corporate office", "head office", "headquarters"]
+                ):
+                    snippets.append(f"Company website: {snippet}")
+                    break  # one trusted snippet is enough
 
-        return "\n".join(snippets)
-    except Exception as e:
-        logger.warning(f"Address search snippets failed for {company_name}: {e}")
-        return f"Could not perform Google address search: {e}"
+            if snippets:
+                break  # stop after first query that returns useful results
+
+        except Exception as e:
+            logger.warning(f"Address search failed for {company_name} (query: {query}): {e}")
+            continue
+
+    return "\n".join(snippets) if snippets else "No address found in Google search results."
 

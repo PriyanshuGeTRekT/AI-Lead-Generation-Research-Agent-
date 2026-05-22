@@ -160,27 +160,25 @@ class ResearchAgent(BaseAgent):
                     lead_data["address"] = contacts["address"]
 
                 # Fallback Address parsing from Serper snippets if still empty
+                # Priority: Knowledge Graph > Direct Answer > Company website snippet
+                # Organic results are NOT trusted (too many wrong companies get picked up)
                 if not lead_data.get("address"):
-                    if "Google Knowledge Graph Address for" in address_snippets:
-                        for line in address_snippets.split("\n"):
-                            if "Google Knowledge Graph Address for" in line:
-                                lead_data["address"] = line.split(":", 1)[1].strip()
+                    for line in address_snippets.split("\n"):
+                        if "Google Knowledge Graph Address for" in line:
+                            addr = line.split(":", 1)[1].strip() if ":" in line else ""
+                            if addr:
+                                lead_data["address"] = addr
                                 break
-                    elif "Google Direct Answer:" in address_snippets:
-                        for line in address_snippets.split("\n"):
-                            if "Google Direct Answer:" in line:
-                                lead_data["address"] = line.split(":", 1)[1].strip()
+                        elif "Google Direct Answer:" in line:
+                            addr = line.split("Google Direct Answer:", 1)[1].strip()
+                            if addr and len(addr) > 10:
+                                lead_data["address"] = addr
                                 break
-                    else:
-                        # Fallback: extract address-like content from organic snippets
-                        for line in address_snippets.split("\n"):
-                            line_lower = line.lower()
-                            if any(k in line_lower for k in ["address", "headquarters", "registered office", "corporate office", "office location", "office at", "located at", "stands located at", "plot no", "street", "building", "road", "sector", "industrial area"]):
-                                if ":" in line:
-                                    parts = line.split(":", 1)[1].strip()
-                                    if len(parts) > 15:
-                                        lead_data["address"] = parts
-                                        break
+                        elif "Company website:" in line:
+                            addr = line.split("Company website:", 1)[1].strip()
+                            if addr and len(addr) > 10:
+                                lead_data["address"] = addr
+                                break
 
                 # If location is empty but we got a valid address, extract city/state/country as location
                 if not lead_data.get("location") and lead_data.get("address"):
