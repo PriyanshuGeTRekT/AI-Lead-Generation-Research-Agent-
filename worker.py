@@ -101,16 +101,26 @@ def run_pipeline_task(self, keyword: str, run_id: str, max_leads: int = None) ->
 
         log_lead_quality(leads)
 
-        # Atomic write — never overwrite existing data with an empty result.
-        # If this run found 0 leads (scraping failure, all filtered out, etc.)
-        # keep whatever was previously saved so the dashboard stays populated.
+        # Merge new leads with all previously saved leads so every run accumulates.
+        # Never overwrite with empty — if this run found 0 leads keep existing data.
         data_path = Path(_os.getenv("DATA_PATH", "./data/leads.json"))
         data_path.parent.mkdir(parents=True, exist_ok=True)
         if leads:
+            existing = []
+            if data_path.exists():
+                try:
+                    with open(data_path) as f:
+                        existing = json.load(f)
+                except Exception:
+                    existing = []
+            existing_keys = {l.get("id") or l.get("company_name") for l in existing}
+            truly_new = [l for l in leads if (l.get("id") or l.get("company_name")) not in existing_keys]
+            all_leads = existing + truly_new
             tmp_path = data_path.with_suffix(".tmp")
             with open(tmp_path, "w") as f:
-                json.dump(leads, f, indent=2)
+                json.dump(all_leads, f, indent=2)
             _os.replace(tmp_path, data_path)
+            leads = all_leads  # return full accumulated list in task result
 
         qualified = [l for l in leads if l.get("status") in ("outreach_ready", "pending_review")]
         disqualified = [l for l in leads if l.get("status") == "disqualified"]

@@ -240,14 +240,15 @@ def generate_leads(request: LeadRequest, req: Request):
 
         log_lead_quality(leads)
 
-        # Atomic write — never clobber existing data with an empty result
-        data_path = Path(settings.data_path)
-        data_path.parent.mkdir(parents=True, exist_ok=True)
+        # Merge new leads with all previously saved leads, then save
+        # This ensures all runs accumulate — /leads always returns full history
         if leads:
-            tmp_path = data_path.with_suffix(".tmp")
-            with open(tmp_path, "w") as f:
-                json.dump(leads, f, indent=2)
-            os.replace(tmp_path, data_path)
+            existing = _load_leads()
+            existing_keys = {l.get("id") or l.get("company_name") for l in existing}
+            truly_new = [l for l in leads if (l.get("id") or l.get("company_name")) not in existing_keys]
+            all_leads = existing + truly_new
+            _save_leads(all_leads)
+            leads = all_leads  # return full list in response
 
         qualified = [l for l in leads if l.get("status") in ("outreach_ready", "pending_review")]
         disqualified = [l for l in leads if l.get("status") == "disqualified"]
