@@ -14,7 +14,7 @@ import json
 import uuid
 from graph.state import LeadState
 from agents.base import BaseAgent
-from tools.web_search import search_companies_multi_source, scrape_company_info, scrape_company_contacts
+from tools.web_search import search_companies_multi_source, scrape_company_info, scrape_company_contacts, search_company_address_snippets
 from tools.linkedin_enricher import enrich_decision_maker
 from tools.tech_stack_detector import detect_tech_stack
 from cache.redis_client import is_duplicate_lead, mark_lead_seen
@@ -130,7 +130,6 @@ class ResearchAgent(BaseAgent):
             search_title = result.get("title", "")
             company_search_name = search_title.split("-")[0].split("|")[0].strip()
             
-            from tools.web_search import search_company_address_snippets
             address_snippets = search_company_address_snippets(company_search_name, target_country)
 
             prompt = RESEARCH_PROMPT.format(

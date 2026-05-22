@@ -103,7 +103,7 @@ def run_pipeline(keyword: str, max_leads: int = None) -> LeadState:
 
     final_state = graph.invoke(initial_state)
 
-    qualified = sum(1 for l in final_state["leads"] if l.get("status") == "outreach_ready")
+    qualified = sum(1 for l in final_state["leads"] if l.get("status") in ("outreach_ready", "pending_review"))
     disqualified = sum(1 for l in final_state["leads"] if l.get("status") == "disqualified")
 
     log.info(

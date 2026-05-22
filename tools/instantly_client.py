@@ -172,7 +172,7 @@ def _call_instantly(
                 ep["url"],
                 headers=ep["headers"],
                 json=ep["json"],
-                timeout=15,
+                timeout=6,  # reduced from 15 — fail fast if endpoint is wrong
             )
             if resp.status_code == 401:
                 logger.warning("[Instantly] Auth failed — check INSTANTLY_API_KEY in .env")

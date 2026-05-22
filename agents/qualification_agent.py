@@ -152,9 +152,10 @@ class QualificationAgent(BaseAgent):
                 size_str = lead.get("size") or lead.get("employee_count") or "unknown size"
                 industry_str = lead.get("industry", "company")
                 location_str = lead.get("location", "India")
-                dm_str = lead.get("decision_maker") or (
-                    lead.get("decision_makers", ["Unknown"])[0]
-                    if lead.get("decision_makers") else "Unknown"
+                dm_str = (
+                    lead.get("decision_maker_full_name")
+                    or lead.get("decision_maker_name")
+                    or (lead.get("decision_makers", ["Unknown"])[0] if lead.get("decision_makers") else "Unknown")
                 )
                 lead["summary"] = (
                     f"{lead.get('company_name', 'Unknown Company')}  |  "
@@ -195,7 +196,7 @@ class QualificationAgent(BaseAgent):
                 f"Qualification Agent: {len(qualified_leads)} qualified, "
                 f"{len(disqualified_leads)} disqualified"
             ],
-            "next": "sales" if leads else "END",
+            "next": "sales" if qualified_leads else "END",
         }
 
 
