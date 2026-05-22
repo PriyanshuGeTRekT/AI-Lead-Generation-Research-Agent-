@@ -226,27 +226,28 @@ Uses RAG to ground all product claims in actual HumanMaximizer feature documenta
 
 ## Multi-Source Lead Discovery
 
-The Research Agent searches three sources and deduplicates by domain:
+`tools/web_search.py` exposes `search_companies_multi_source(keyword, max_results)` which queries two sources and merges results, deduplicating by domain:
 
-- **Serper.dev** (`tools/web_search.py`): Real Google Search results via API (`gl=in` India geo-targeting). A domain blocklist filters out aggregators, job boards, and list pages so only actual company websites pass through. Falls back to a curated 15-company Indian dataset if no API key is set.
-- **Naukri.com** (`tools/naukri_scraper.py`): Scrapes companies posting HR Manager, HRIS, or Payroll job listings — a strong buying signal.
-- **Indeed.in** (`tools/indeed_scraper.py`): Same buying-signal logic from India's Indeed.
+- **Instantly.ai** (`tools/instantly_client.py`): Queries a 160M+ contact B2B database. Returns leads pre-enriched with decision maker name, email, job title, and LinkedIn URL — no scraping needed. 1,000 free credits/month. Gracefully returns empty list if API key is not set or all endpoint variants return 404.
+- **Serper.dev** (`tools/web_search.py`): Real Google Search results via API with India geo-targeting (`gl=in`). Runs 12 diversified query variants across different cities (Mumbai, Delhi, Bangalore, Pune, Chennai, Hyderabad, etc.) and industries to avoid returning the same 8 companies every run. A domain blocklist removes aggregators (Wikipedia, IndiaMART, Crunchbase, Naukri, LinkedIn) so only actual company websites pass through. Falls back to a curated 90-company shuffled dataset if no API key is set.
 
-The buying signal logic: a company actively hiring HR staff is in an active HR spending cycle. They have headcount for HR, which means they have a payroll and compliance problem to solve, making them a direct prospect for HRMS software.
-
-`tools/web_search.py` exposes `search_companies_multi_source(keyword)` which fans out to all three sources. The scrapers are fail-safe — any network error returns an empty list so the pipeline keeps running on whatever the other sources returned.
+Both sources are fail-safe — any network error returns an empty list and the pipeline continues on whatever the other source returned.
 
 ---
 
 ## Structured LLM Output
 
-The qualification agent uses LangChain's `.with_structured_output()` bound to a Pydantic schema. Groq's Llama 3.1 implements this via tool calling, so the response is always schema-valid before it reaches application code.
+The qualification agent uses LangChain's `.with_structured_output()` bound to a Pydantic schema. Both DeepSeek V3 and Groq Llama 3.1 implement this via tool calling, so the response is always schema-valid before it reaches application code.
 
 Two Pydantic models in `models/schemas.py`:
 - `LeadExtraction`: company info fields (name, size, industry, location, decision makers, pain points)
 - `QualificationResult`: `score` (float 0-10), `reasoning` (str), `key_signals` (list), `recommended_action` (str)
 
-`agents/base.py` adds `call_llm_structured(prompt, schema)`. Fallback: if `.with_structured_output()` raises, falls back to raw `call_llm()` + JSON parsing + `schema(**parsed)`. The pipeline never hard-fails on structured output issues.
+`agents/base.py` provides two LLM call methods:
+- `call_llm(prompt)` — raw string response with Redis caching, exponential backoff retry, and automatic DeepSeek → Groq provider selection
+- `call_llm_structured(prompt, schema)` — structured output via `.with_structured_output()`; falls back to `call_llm()` + JSON parsing + `schema(**parsed)` if structured output fails
+
+The pipeline never hard-fails on LLM or structured output issues.
 
 ---
 
@@ -335,14 +336,15 @@ humanmaximizer.com → Scrape → Chunk (500 tokens, 50 overlap)
 
 **LangSmith (LLM-level tracing)** — set `LANGCHAIN_API_KEY` in `.env`:
 - Every LLM call traced automatically: prompt, response, token count, latency
-- Using ChatGroq (LangChain Runnable) means zero manual instrumentation
+- Both `ChatOpenAI` (DeepSeek) and `ChatGroq` are LangChain Runnables — zero manual instrumentation needed
 - Full LangGraph pipeline run visible as parent trace with per-agent child spans
 - Hallucination warnings surfaced as events on the trace
 
 **Custom metrics (business-level)**:
 - `GET /metrics`: JSONL-backed pipeline stats (latency, lead counts, scores)
-- Structured JSON logs in `data/logs/app.log` with correlation IDs per run
-- Each agent logs decisions to `state["messages"]` (visible in dashboard log panel)
+- Structured JSON logs in `data/logs/app.log` with correlation IDs per run (`loguru`)
+- Each agent logs decisions to `state["messages"]` (visible in dashboard pipeline log panel)
+- `@stage_timer` decorator on each agent's `run()` records per-stage wall-clock time
 
 ---
 
@@ -367,29 +369,33 @@ humanmaximizer.com → Scrape → Chunk (500 tokens, 50 overlap)
 
 ## Model Selection
 
-Using **Llama 3.1 8B** (Meta, open-source) via **Groq** (LPU inference hardware):
-- Open-source model — satisfies the assignment requirement
-- Groq is the inference engine, not the model provider
-- 8192 token context window
-- Sub-second response time via Groq's LPU
-- Free tier: 14,400 requests/day
+The pipeline uses a **dual-provider setup** with automatic fallback:
 
-| Model | JSON | Reasoning | Verdict |
-|-------|------|-----------|---------|
-| **Llama 3.1 8B** ✅ | ✅ Very good | ✅ Best in class | **Our choice** |
-| Mistral 7B | ✅ Excellent | ⚠️ Good | Best if RAM < 8GB |
-| Phi-3 Mini 3.8B | ⚠️ Struggles | ❌ Weak | Too small |
-| Mixtral 8x7B | ✅ Best | ✅ Best | Needs GPU workstation |
+### Primary: DeepSeek V3 (`deepseek-chat`)
+- OpenAI-compatible API — uses `langchain-openai` with `openai_api_base` override
+- 500+ requests/minute — eliminates the rate-limit bottleneck of free-tier Groq
+- Pipelines that took 17+ minutes on Groq complete in ~1 minute on DeepSeek
+- Cost: ~$0.001–0.002 per full pipeline run
 
-### Running Locally with Ollama (no Groq)
+### Fallback: Groq + Llama 3.1 8B
+- Automatically used if `DEEPSEEK_API_KEY` is empty
+- Sub-second LPU inference, 14,400 req/day free tier
+- 30 req/min rate limit can bottleneck large runs (10+ leads)
+
+| Provider | Rate Limit | Latency | Cost | Use Case |
+|----------|-----------|---------|------|----------|
+| **DeepSeek V3** ✅ | 500 req/min | ~2–3s/call | ~$0.001/run | Production, demos |
+| Groq Llama 3.1 | 30 req/min | ~0.5s/call | Free | Dev, small runs |
+
+### Running Locally with Ollama (no API keys)
 
 ```python
-# agents/base.py
+# agents/base.py — replace _get_llm()
 from langchain_ollama import ChatOllama
 llm = ChatOllama(model="llama3", temperature=temperature)
 ```
 
-Everything else (retry logic, caching, LangSmith tracing) stays the same since both are LangChain Runnables.
+Everything else (retry logic, caching, LangSmith tracing) stays the same since all providers are LangChain Runnables.
 
 ---
 
