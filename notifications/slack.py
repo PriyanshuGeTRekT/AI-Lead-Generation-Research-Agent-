@@ -15,14 +15,21 @@ No-op mode: if SLACK_WEBHOOK_URL is not set, the notification is logged locally
 and the function returns True. This means the system works out of the box
 without Slack configured.
 """
-import os
 import json
 import requests
+from urllib.parse import urlencode
 from loguru import logger
+from core.config import get_settings
 
 
-SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
-BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
+settings = get_settings()
+
+
+def _with_review_token(url: str) -> str:
+    if not settings.review_action_token:
+        return url
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}{urlencode({'token': settings.review_action_token})}"
 
 
 def send_lead_review_request(lead: dict) -> bool:
@@ -58,10 +65,10 @@ def send_lead_review_request(lead: dict) -> bool:
     top_pain_points = pain_points[:3]
     pain_points_text = "\n".join(f"- {p}" for p in top_pain_points) if top_pain_points else "- None identified"
 
-    approve_url = f"{BASE_URL}/leads/{lead_id}/approve"
-    reject_url = f"{BASE_URL}/leads/{lead_id}/reject"
+    approve_url = _with_review_token(f"{settings.base_url}/leads/{lead_id}/approve")
+    reject_url = _with_review_token(f"{settings.base_url}/leads/{lead_id}/reject")
 
-    if not SLACK_WEBHOOK_URL:
+    if not settings.slack_webhook_url:
         logger.info(
             f"[Slack no-op] Lead review request for '{company_name}' | "
             f"id={lead_id} score={score} industry={industry} location={location} | "
@@ -200,7 +207,7 @@ def send_lead_review_request(lead: dict) -> bool:
 
     try:
         response = requests.post(
-            SLACK_WEBHOOK_URL,
+            settings.slack_webhook_url,
             data=json.dumps(payload),
             headers={"Content-Type": "application/json"},
             timeout=5,

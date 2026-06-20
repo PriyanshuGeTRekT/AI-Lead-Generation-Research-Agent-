@@ -14,6 +14,9 @@ from agents.base import BaseAgent
 from rag.retriever import retrieve_hrms_context
 from rag.hallucination_guard import guard_llm_response
 from observability.langsmith_tracer import stage_timer, log_hallucination_event
+from observability.event_bus import emit
+from agents.debate_qualifier import debate_qualify
+from core import runtime_config as rc
 from core.config import get_settings
 from models.schemas import QualificationResult
 
@@ -79,6 +82,9 @@ class QualificationAgent(BaseAgent):
         leads = state.get("leads", [])
         researched = [l for l in leads if l.get("status") == "researched"]
         correlation_id = state.get("correlation_id", self.correlation_id)
+        run_id = state.get("run_id")
+        emit(run_id, "stage_start", agent="qualification_agent", stage="qualify",
+             message="Adversarial debate scoring")
 
         self.log.info(f"Qualifying {len(researched)} leads (threshold: {settings.qualification_threshold})")
 
@@ -111,6 +117,35 @@ class QualificationAgent(BaseAgent):
                 disqualified_leads.append(lead)
                 continue
 
+            # ── FAST MODE: deterministic score from the signal-based lead_score
+            #    (no LLM, no debate) — keeps runs fast on any model. ────────────
+            if state.get("fast", True):
+                sc = lead.get("lead_score") or {}
+                score = float(sc.get("predicted_score", 5.0))
+                signals = (sc.get("reasons") or [])[:3]
+                reason = (
+                    f"Signal score {score}/10 — no-HRMS confidence "
+                    f"{sc.get('no_hrms_confidence', '?')}, fit {sc.get('fit', '?')}, timing {sc.get('timing', '?')}."
+                )
+                lead["qualification_score"] = score
+                lead["qualification_reason"] = reason
+                lead["key_signals"] = signals
+                lead["recommended_action"] = "outreach" if score >= settings.qualification_threshold else "nurture"
+                dm_str = lead.get("decision_maker_full_name") or lead.get("decision_maker_name") or "Unknown"
+                lead["summary"] = (
+                    f"{company_name}  |  {lead.get('industry', '')}  |  {lead.get('location', 'India')}  |  {lead.get('size', '')}\n"
+                    f"Score: {score:.1f}/10  {_score_bar(score)}\n{reason}\n"
+                    f"Key signals: {' · '.join(signals) if signals else '—'}\n"
+                    f"Decision maker: {dm_str}"
+                )
+                if score >= settings.qualification_threshold:
+                    lead["status"] = "qualified"
+                    qualified_leads.append(lead)
+                else:
+                    lead["status"] = "disqualified"
+                    disqualified_leads.append(lead)
+                continue
+
             # RAG retrieval for grounding
             description = lead.get("description", "") + " " + " ".join(lead.get("pain_points", []))
             rag_context = retrieve_hrms_context(description)
@@ -121,19 +156,38 @@ class QualificationAgent(BaseAgent):
             )
 
             try:
-                # Use structured output to get a validated QualificationResult instance
-                result = self.call_llm_structured(
-                    prompt,
-                    QualificationResult,
-                    temperature=settings.llm_temperature_extract,
-                )
-
-                score = result.score
-                reasoning = result.reasoning
+                # ── Adversarial Qualification Debate (opt-in — 3 LLM calls) ────
+                # Off by default for speed: a single structured call is used.
+                # Enable by setting use_debate=true in runtime config.
+                _use_debate = str(rc.get("use_debate", "")).lower() in ("1", "true", "yes", "on")
+                debate = debate_qualify(self, lead, rag_context) if _use_debate else None
+                if debate:
+                    score = debate["consensus_score"]
+                    reasoning = debate["verdict"]
+                    key_signals = [
+                        t["argument"][:90] for t in debate["transcript"][:3] if t.get("argument")
+                    ]
+                    recommended_action = (
+                        "outreach" if score >= settings.qualification_threshold else "nurture"
+                    )
+                    lead["debate"] = debate
+                else:
+                    # Use structured output to get a validated QualificationResult
+                    result = self.call_llm_structured(
+                        prompt,
+                        QualificationResult,
+                        temperature=settings.llm_temperature_extract,
+                    )
+                    score = result.score
+                    reasoning = result.reasoning
+                    key_signals = result.key_signals
+                    recommended_action = result.recommended_action
 
                 # Hallucination guard on qualification output
                 guard = guard_llm_response(
-                    response_text=json.dumps(result.model_dump()),
+                    response_text=json.dumps(
+                        {"score": score, "reasoning": reasoning, "key_signals": key_signals}
+                    ),
                     rag_context=rag_context,
                     strict=False,
                 )
@@ -143,12 +197,12 @@ class QualificationAgent(BaseAgent):
 
                 lead["qualification_score"] = score
                 lead["qualification_reason"] = reasoning
-                lead["key_signals"] = result.key_signals
-                lead["recommended_action"] = result.recommended_action
+                lead["key_signals"] = key_signals
+                lead["recommended_action"] = recommended_action
 
                 # Build a clean, human-readable summary for dashboard + Slack display
                 score_bar = _score_bar(score)
-                signals_str = " · ".join(result.key_signals[:3]) if result.key_signals else "—"
+                signals_str = " · ".join(key_signals[:3]) if key_signals else "—"
                 size_str = lead.get("size") or lead.get("employee_count") or "unknown size"
                 industry_str = lead.get("industry", "company")
                 location_str = lead.get("location", "India")
@@ -175,6 +229,9 @@ class QualificationAgent(BaseAgent):
                     disqualified_leads.append(lead)
                     self.log.info(f"DISQUALIFIED (score: {score}): {company_name}")
 
+                emit(run_id, "score", agent="qualification_agent", stage="qualify",
+                     message=f"{company_name} → {score}/10", lead=lead, meta={"score": score})
+
             except Exception as e:
                 self.log.error(f"Error scoring {company_name}: {e}")
                 lead["status"] = "disqualified"
@@ -188,6 +245,8 @@ class QualificationAgent(BaseAgent):
             f"Qualification complete: {len(qualified_leads)} qualified, "
             f"{len(disqualified_leads)} disqualified"
         )
+        emit(run_id, "stage_end", agent="qualification_agent", stage="qualify",
+             message=f"{len(qualified_leads)} qualified, {len(disqualified_leads)} disqualified")
 
         return {
             **state,
@@ -196,7 +255,9 @@ class QualificationAgent(BaseAgent):
                 f"Qualification Agent: {len(qualified_leads)} qualified, "
                 f"{len(disqualified_leads)} disqualified"
             ],
-            "next": "sales" if qualified_leads else "END",
+            # Outreach is now generated ON-DEMAND per lead (POST /leads/{id}/generate-email),
+            # so the pipeline ends here instead of drafting emails for everyone.
+            "next": "END",
         }
 
 

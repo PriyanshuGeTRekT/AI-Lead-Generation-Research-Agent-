@@ -46,3 +46,17 @@ credentials.json
 # Generated presentations (binary, regenerated from scripts/)
 *.pptx
 *.pdf
+
+# runtime secrets / caches (never commit)
+data/runtime_config.json
+data/lead_cache.json
+data/flywheel.json
+data/tracking.json
+
+# Large local data / DB (do not push — regenerate via harvest; see STARTUP_INDIA_PLAYBOOK.md)
+data/warehouse.db
+data/warehouse.db-wal
+data/warehouse.db-shm
+data/*.db
+data/_si862.json
+data/_si50_agents.json

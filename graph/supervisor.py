@@ -76,12 +76,23 @@ def build_graph() -> StateGraph:
     return graph.compile()
 
 
-def run_pipeline(keyword: str, max_leads: int = None) -> LeadState:
+def run_pipeline(
+    keyword: str,
+    max_leads: int = None,
+    run_id: str = None,
+    country: str = None,
+    region: str = None,
+    exclude_with_hrms: bool = True,
+    mode: str = "discover",
+    fast: bool = True,
+) -> LeadState:
     """
     Entry point: run the full lead generation pipeline.
     Generates a correlation_id that flows through all agent logs.
 
     max_leads: cap on how many leads to process (overrides config default).
+    run_id:    Theater stream id (the pollable job id). Agents emit live events
+               keyed by this id; falls back to correlation_id when not provided.
     """
     correlation_id = str(uuid.uuid4())[:8]
     log = logger.bind(agent="supervisor", correlation_id=correlation_id)
@@ -97,11 +108,25 @@ def run_pipeline(keyword: str, max_leads: int = None) -> LeadState:
         "errors": [],
         "correlation_id": correlation_id,
         "max_leads": max_leads or settings.max_leads_per_run,
+        "run_id": run_id or correlation_id,
+        "country": country,
+        "region": region,
+        "exclude_with_hrms": exclude_with_hrms,
+        "mode": mode,
+        "fast": fast,
     }
 
     log.info(f"Pipeline START | keyword='{keyword}' max_leads={initial_state['max_leads']}")
 
     final_state = graph.invoke(initial_state)
+
+    # Signal the Live Agent Theater that the run is complete.
+    try:
+        from observability.event_bus import emit
+        emit(initial_state["run_id"], "done", agent="supervisor", stage="done",
+             message="Pipeline complete")
+    except Exception:
+        pass
 
     qualified = sum(1 for l in final_state["leads"] if l.get("status") in ("outreach_ready", "pending_review"))
     disqualified = sum(1 for l in final_state["leads"] if l.get("status") == "disqualified")

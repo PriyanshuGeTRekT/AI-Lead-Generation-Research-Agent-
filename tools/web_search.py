@@ -196,7 +196,50 @@ def extract_phone(text: str) -> str:
     return ""
 
 
-SERPER_API_KEY = _get_settings().serper_api_key
+def _serper_key() -> str:
+    """Serper key, preferring the UI-set runtime config over env/Settings."""
+    try:
+        from core import runtime_config as rc
+        return rc.get("serper_api_key", "") or ""
+    except Exception:
+        return _get_settings().serper_api_key or ""
+
+
+_FIND_AGG = ("justdial", "indiamart", "sulekha", "linkedin", "facebook", "wikipedia",
+             "crunchbase", "zaubacorp", "tofler", "glassdoor", "indeed", "naukri",
+             "youtube", "instagram", "twitter", "x.com")
+
+
+def find_company(name: str, region: str = "", max_results: int = 1) -> List[Dict]:
+    """
+    'Find a specific company' mode: resolve a named company directly to its official
+    site (so searching your own company works) instead of category discovery.
+    Returns candidate dicts {url, title, source}. Fail-safe [].
+    """
+    key = _serper_key()
+    if not key or not name.strip():
+        return []
+    q = f"{name} {region} official website".strip()
+    try:
+        resp = requests.post(
+            "https://google.serper.dev/search",
+            headers={"X-API-KEY": key, "Content-Type": "application/json"},
+            data=__import__("json").dumps({"q": q, "gl": "in", "num": 10}),
+            timeout=12,
+        )
+        organic = resp.json().get("organic", []) or []
+    except Exception:
+        return []
+    out: List[Dict] = []
+    for item in organic:
+        link = item.get("link", "")
+        if not link or any(a in link.lower() for a in _FIND_AGG):
+            continue
+        out.append({"url": link, "title": item.get("title", name).split(" - ")[0].split(" | ")[0].strip(),
+                    "source": "company-lookup"})
+        if len(out) >= max_results:
+            break
+    return out
 
 
 # ── Query diversification ─────────────────────────────────────────────────────
@@ -388,30 +431,94 @@ def _get_domain(url: str) -> str:
         return ""
 
 
-# Domains to exclude — aggregators, lists, PDFs, social media, job boards
+# Domains to exclude — aggregators, listicles, directories, social, job boards,
+# review sites, marketplaces, news, and academic sources. These dominate generic
+# Google results and are NOT individual company homepages.
 _BLOCKED_DOMAINS = {
-    "wikipedia.org", "linkedin.com", "facebook.com", "twitter.com",
-    "instagram.com", "youtube.com", "indiamart.com", "justdial.com",
-    "companiesmarketcap.com", "dnb.co.in", "dnb.com", "ambitionbox.com",
-    "glassdoor.com", "indeed.com", "naukri.com", "moneycontrol.com",
-    "economictimes.com", "livemint.com", "businessstandard.com",
-    "easyleadz.com", "crunchbase.com", "zaubacorp.com", "tofler.in",
-    "tracxn.com", "startupindia.gov.in", "ibef.org", "statista.com",
+    # social / wiki / Q&A / content
+    "wikipedia.org", "fandom.com", "linkedin.com", "facebook.com", "twitter.com",
+    "x.com", "instagram.com", "youtube.com", "pinterest.com", "reddit.com",
+    "quora.com", "medium.com", "substack.com", "blogspot.com", "wordpress.com",
+    "scribd.com", "slideshare.net", "studocu.com", "issuu.com",
+    # business directories / data aggregators / lists
+    "indiamart.com", "justdial.com", "sulekha.com", "exportersindia.com",
+    "tradeindia.com", "made-in-china.com", "alibaba.com", "builtin.com",
+    "zoominfo.com", "companiesmarketcap.com", "dnb.co.in", "dnb.com",
+    "crunchbase.com", "zaubacorp.com", "tofler.in", "tracxn.com", "owler.com",
+    "leadiq.com", "easyleadz.com", "6figr.com", "rocketreach.co", "apollo.io",
+    "thomasnet.com", "yellowpages.in", "indiacom.com", "clutch.co",
+    "goodfirms.co", "g2.com", "capterra.com", "trustpilot.com", "mouthshut.com",
+    "yelp.com", "ibef.org", "statista.com", "marketsandmarkets.com",
+    # job boards / review / salary
+    "ambitionbox.com", "glassdoor.com", "indeed.com", "naukri.com", "shine.com",
+    "foundit.in", "timesjobs.com", "wellfound.com", "angel.co", "ziprecruiter.com",
+    "simplyhired.com", "jobsora.com", "hirist.com", "instahyre.com",
+    # news / media
+    "moneycontrol.com", "economictimes.indiatimes.com", "economictimes.com",
+    "livemint.com", "business-standard.com", "businessstandard.com", "ndtv.com",
+    "hindustantimes.com", "thehindu.com", "indianexpress.com", "forbes.com",
+    "inc42.com", "yourstory.com", "entrackr.com", "bloomberg.com", "reuters.com",
+    "businessinsider.in", "financialexpress.com",
+    # academic / research / docs
+    "researchgate.net", "academia.edu", "springer.com", "sciencedirect.com",
+    "jstor.org", "tandfonline.com", "asianstudies.org", "ssrn.com", "mdpi.com",
+    # dev / app stores
+    "github.com", "play.google.com", "apps.apple.com", "amazon.in", "flipkart.com",
+    # industry associations / chambers (not companies)
+    "cii.in", "ficci.in", "assocham.org", "nasscom.in", "phdcci.in", "msme.gov.in",
+    "smechamberofindia.com", "indiansmechamber.com", "wasmeinfo.org",
 }
+
+# URL path fragments that signal a listicle/article/directory, not a company home.
+_BAD_PATH_HINTS = (
+    "/top-", "-top-", "/top10", "/top-10", "/best-", "-best-", "/list", "/lists/",
+    "/companies/", "/company-list", "/blog", "/news", "/article", "/articles/",
+    "/wiki", "/jobs", "/job/", "/questions/", "/question/", "/doc/", "/document",
+    "/publication", "/messages/", "/p/", "/posts/", "/directory", "/rankings",
+    "/category/", "/tag/", "/search", "/profile/", "/review",
+)
+
+# Title/snippet phrases that signal a listicle/article rather than one company.
+_LISTICLE_HINTS = (
+    "top ", "best ", "list of", " companies in ", "leading ", "largest ",
+    "guide to", " vs ", "how to", "what is", "examples of", "directory",
+    "rankings", "list:", "top-", "biggest ", "fastest growing", "famous ",
+)
 
 
 def _is_company_url(url: str) -> bool:
-    """Return True if the URL looks like an actual company website."""
-    if not url or url.lower().endswith(".pdf"):
+    """Return True if the URL looks like an actual company website (not an
+    aggregator, listicle, directory, article, PDF, academic, or job page)."""
+    if not url:
+        return False
+    low = url.lower()
+    if low.endswith((".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx")):
         return False
     try:
-        domain = urlparse(url).netloc.replace("www.", "").lower()
+        domain = urlparse(low).netloc.replace("www.", "")
         for blocked in _BLOCKED_DOMAINS:
             if domain == blocked or domain.endswith("." + blocked):
                 return False
+        # academic / government tend not to be SME prospects
+        if domain.endswith(".edu") or domain.endswith(".ac.in") or domain.endswith(".gov") or domain.endswith(".gov.in"):
+            return False
+        path = urlparse(low).path
+        if any(h in path for h in _BAD_PATH_HINTS):
+            return False
     except Exception:
         pass
     return True
+
+
+def _is_listicle(title: str, snippet: str = "") -> bool:
+    """True if the result looks like a 'Top N companies' list / article."""
+    t = (title or "").lower()
+    if any(h in t for h in _LISTICLE_HINTS):
+        return True
+    # numeric listicle, e.g. "10 manufacturing companies…"
+    if re.match(r"^\s*\d{1,3}\s+\w", t) and "compan" in t:
+        return True
+    return False
 
 
 # ── Serper API calls ──────────────────────────────────────────────────────────
@@ -420,7 +527,11 @@ def _is_company_url(url: str) -> bool:
 _SERPER_EXCLUSIONS = (
     "-site:greythr.com -site:darwinbox.com -site:keka.com "
     "-site:zoho.com -site:sumhr.com -site:bamboohr.com "
-    '-"HRMS software company" -"HR software provider" -"payroll software"'
+    '-"HRMS software company" -"HR software provider" -"payroll software" '
+    # steer Google away from listicles / directories / job boards toward homepages
+    '-intitle:top -intitle:best -intitle:"list of" -"top 10" -"largest companies" '
+    "-site:linkedin.com -site:indiamart.com -site:zoominfo.com -site:builtin.com "
+    "-site:ambitionbox.com -site:naukri.com -site:glassdoor.com"
 )
 
 
@@ -433,7 +544,7 @@ def _search_serper_page(query: str, page: int = 1, num: int = 10) -> List[Dict]:
     try:
         resp = requests.post(
             "https://google.serper.dev/search",
-            headers={"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"},
+            headers={"X-API-KEY": _serper_key(), "Content-Type": "application/json"},
             json={"q": full_query, "num": num, "gl": "in", "hl": "en", "page": page},
             timeout=10,
         )
@@ -443,11 +554,13 @@ def _search_serper_page(query: str, page: int = 1, num: int = 10) -> List[Dict]:
         results = []
         for r in data.get("organic", []):
             url = r.get("link", "")
-            if _is_company_url(url):
+            title = r.get("title", "")
+            snippet = r.get("snippet", "")
+            if _is_company_url(url) and not _is_listicle(title, snippet):
                 results.append({
-                    "title": r.get("title", ""),
+                    "title": title,
                     "url": url,
-                    "snippet": r.get("snippet", ""),
+                    "snippet": snippet,
                     "source": "serper",
                 })
         return results
@@ -469,14 +582,16 @@ def _search_serper_broad(keyword: str, total: int = 80) -> List[Dict]:
       - Deduplicate by root domain throughout
     This gives ~80-100 unique candidates in ~13 Serper API calls.
     """
-    variants = _generate_query_variants(keyword, count=10)
+    variants = _generate_query_variants(keyword, count=12)
     seen_domains: set = set()
     all_results: List[Dict] = []
 
     for i, variant in enumerate(variants):
         if len(all_results) >= total:
             break
-        pages = [1, 2] if i < 3 else [1]
+        # First 6 variants get 2 pages so we gather plenty of raw candidates
+        # before the strict company-URL/listicle filter thins them out.
+        pages = [1, 2] if i < 6 else [1]
         for page in pages:
             if len(all_results) >= total:
                 break
@@ -499,19 +614,23 @@ def _search_serper_broad(keyword: str, total: int = 80) -> List[Dict]:
 
 # ── Public search entry point ─────────────────────────────────────────────────
 
-def search_companies(keyword: str, max_results: int = 80) -> List[Dict]:
+def search_companies(keyword: str, max_results: int = 80, allow_fallback: bool = True) -> List[Dict]:
     """
     Search for companies using Serper.dev (multi-query, multi-page).
-    Falls back to a large shuffled curated dataset if API key is missing.
+    Falls back to a large shuffled curated dataset ONLY if allow_fallback (used for
+    the offline demo). Real harvest passes allow_fallback=False so the warehouse is
+    never polluted with demo companies when Serper has no credits.
     """
-    if SERPER_API_KEY:
+    if _serper_key():
         results = _search_serper_broad(keyword, total=max_results)
         if results:
             return results
-        logger.warning("[WebSearch] Serper returned no results, using fallback")
+        logger.warning("[WebSearch] Serper returned no results (no credits / no match)")
     else:
-        logger.warning("[WebSearch] No SERPER_API_KEY set — using fallback dataset (set key for live Google results)")
+        logger.warning("[WebSearch] No _serper_key() set")
 
+    if not allow_fallback:
+        return []
     return _get_fallback_companies(keyword, max_results=max_results)
 
 
@@ -520,33 +639,63 @@ def search_companies_multi_source(keyword: str, max_results: int = 80) -> List[D
     Fan-out search: Serper (broad multi-query) + Instantly.ai (B2B contact DB).
     Merges and deduplicates by root domain / company name.
 
-    Instantly leads are placed FIRST because they come with pre-verified contact
-    data (DM name, email, LinkedIn) so the research agent can skip redundant
-    LinkedIn enrichment for those leads.
+    Pre-enriched sources (Apollo/Explorium/Instantly) are placed FIRST because
+    they carry contact data, then the Government registry source, then Serper.
     """
-    # --- Instantly.ai Lead Finder (structured B2B contact data) ---
-    try:
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _instantly():
         from tools.instantly_client import search_instantly_leads
-        instantly_results = search_instantly_leads(keyword, max_results=min(30, max_results // 2))
-    except Exception as e:
-        logger.warning(f"[MultiSource] Instantly search failed: {e}")
-        instantly_results = []
+        return search_instantly_leads(keyword, max_results=min(30, max_results // 2)) or []
 
-    # --- Serper (Google Search, diversified queries) ---
-    serper_results = search_companies(keyword, max_results=max_results)
+    def _apollo():
+        from tools.sources.apollo import search_companies as f
+        return f(keyword, max_results=min(30, max_results)) or []
 
-    instantly_count = len(instantly_results)
-    serper_count    = len(serper_results)
+    def _explorium():
+        from tools.sources.explorium import search_companies as f
+        return f(keyword, max_results=min(30, max_results)) or []
 
-    # Instantly first (richer data), then Serper
-    all_results = instantly_results + serper_results
+    def _govt():
+        from tools.sources.govt import search_companies as f
+        return f(keyword, max_results=min(25, max_results)) or []
+
+    def _wikidata():
+        # FREE, keyless — keeps discovery alive when Serper credits run out.
+        from tools.sources.wikidata import search_companies as f
+        return f(keyword, max_results=min(50, max_results)) or []
+
+    def _serper():
+        # No demo fallback in real harvest — only genuine search results.
+        return search_companies(keyword, max_results=max_results, allow_fallback=False) or []
+
+    # Run every source CONCURRENTLY (multi-agent sourcing). Each is fail-safe and
+    # contributes only if its key is present (Serper is the baseline; Wikidata is
+    # the free fallback so the pool still grows with zero credits).
+    sources = [("apollo", _apollo), ("explorium", _explorium), ("instantly", _instantly),
+               ("govt", _govt), ("wikidata", _wikidata), ("serper", _serper)]
+
+    def _run(item):
+        name, fn = item
+        try:
+            return name, fn()
+        except Exception as e:
+            logger.warning(f"[MultiSource] {name} failed: {e}")
+            return name, []
+
+    gathered: Dict[str, List[Dict]] = {}
+    with ThreadPoolExecutor(max_workers=len(sources)) as ex:
+        for name, res in ex.map(_run, sources):
+            gathered[name] = res
+
+    order = ["apollo", "explorium", "instantly", "govt", "wikidata", "serper"]
+    all_results = [r for n in order for r in gathered.get(n, [])]
 
     seen_domains: set = set()
     deduped: List[Dict] = []
     for item in all_results:
         url = item.get("url", "")
         if not url:
-            # No URL — include if it has at least a title (Instantly company-only results)
             if item.get("title"):
                 deduped.append(item)
             continue
@@ -558,8 +707,8 @@ def search_companies_multi_source(keyword: str, max_results: int = 80) -> List[D
             deduped.append(item)
 
     logger.info(
-        f"[MultiSource] {instantly_count} instantly + {serper_count} serper "
-        f"= {len(deduped)} unique candidates for '{keyword}'"
+        "[MultiSource] " + " + ".join(f"{len(gathered.get(n, []))} {n}" for n in order)
+        + f" = {len(deduped)} unique for '{keyword}'"
     )
     return deduped
 
@@ -1208,7 +1357,7 @@ def search_company_address_snippets(company_name: str, country: str = "") -> str
       2. 'registered office' query — finds MCA/company filings snippets
     Organic results are NOT included to avoid picking up other companies' addresses.
     """
-    if not SERPER_API_KEY:
+    if not _serper_key():
         return "No address search results available (missing API key)."
 
     country_str = country or "India"
@@ -1223,7 +1372,7 @@ def search_company_address_snippets(company_name: str, country: str = "") -> str
         try:
             resp = requests.post(
                 "https://google.serper.dev/search",
-                headers={"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"},
+                headers={"X-API-KEY": _serper_key(), "Content-Type": "application/json"},
                 json={"q": query, "num": 5, "gl": "in", "hl": "en"},
                 timeout=8,
             )

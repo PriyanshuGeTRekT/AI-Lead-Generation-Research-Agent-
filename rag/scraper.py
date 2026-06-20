@@ -47,12 +47,45 @@ def scrape_page(url: str) -> Dict:
         return {"url": url, "content": "", "error": str(e)}
 
 
+def build_local_corpus() -> List[Dict]:
+    """
+    Load product knowledge from local files (the hcmv3 product content lives in
+    ./knowledge — e.g. the curated llms.txt). Preferred over web scraping so RAG
+    grounding never depends on the live site (which blocks scrapers).
+    """
+    import os
+    from pathlib import Path
+
+    base = Path(os.getenv("KNOWLEDGE_DIR", "./knowledge"))
+    docs: List[Dict] = []
+    if not base.exists():
+        return docs
+    for path in sorted(base.rglob("*")):
+        if path.suffix.lower() not in (".md", ".mdx", ".txt"):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore").strip()
+        except Exception:
+            continue
+        if len(text) < 30:
+            continue
+        docs.append({"url": f"local:{path.name}", "title": path.stem, "content": text, "error": None})
+    if docs:
+        logger.info(f"Loaded {len(docs)} local knowledge file(s) from {base}")
+    return docs
+
+
 def build_corpus() -> List[Dict]:
     """
-    Scrape all seed URLs and return list of documents for RAG ingestion.
+    Build the RAG corpus. Prefers local curated knowledge (./knowledge); only
+    falls back to scraping humanmaximizer.com if no local files are present.
     """
+    local = build_local_corpus()
+    if local:
+        return local
+
     corpus = []
-    logger.info("Building HRMS knowledge base from humanmaximizer.com...")
+    logger.info("No local knowledge found — falling back to scraping humanmaximizer.com...")
 
     for url in SEED_URLS:
         logger.info(f"Scraping: {url}")

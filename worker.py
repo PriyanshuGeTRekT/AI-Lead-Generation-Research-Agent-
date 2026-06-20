@@ -74,7 +74,17 @@ _setup_beat_schedule()
 
 
 @celery_app.task(bind=True, name="tasks.run_pipeline", max_retries=2)
-def run_pipeline_task(self, keyword: str, run_id: str, max_leads: int = None) -> dict:
+def run_pipeline_task(
+    self,
+    keyword: str,
+    run_id: str,
+    max_leads: int = None,
+    country: str = None,
+    region: str = None,
+    exclude_with_hrms: bool = True,
+    mode: str = "discover",
+    fast: bool = True,
+) -> dict:
     """
     Execute the full multi-agent lead generation pipeline as a background task.
 
@@ -96,7 +106,10 @@ def run_pipeline_task(self, keyword: str, run_id: str, max_leads: int = None) ->
         from graph.supervisor import run_pipeline
         from observability.langsmith_tracer import log_lead_quality
 
-        result = run_pipeline(keyword, max_leads=max_leads)
+        result = run_pipeline(
+            keyword, max_leads=max_leads, run_id=run_id,
+            country=country, region=region, exclude_with_hrms=exclude_with_hrms, mode=mode, fast=fast,
+        )
         leads = result.get("leads", [])
 
         log_lead_quality(leads)

@@ -5,21 +5,54 @@ preventing hallucinations about what HumanMaximizer actually does.
 """
 from typing import List, Optional
 from loguru import logger
-from rag.embeddings import get_model, get_chroma_client, COLLECTION_NAME
+from rag.embeddings import get_model, get_chroma_client, COLLECTION_NAME, vector_available
+
+
+def _local_context(query: str = "", max_chars: int = 2200) -> str:
+    """Fallback grounding when the vector store is unavailable/empty: return the
+    most relevant slices of the local product knowledge (./knowledge)."""
+    try:
+        from rag.scraper import build_local_corpus
+        docs = build_local_corpus()
+    except Exception:
+        docs = []
+    if not docs:
+        return "No product context available."
+    # Light keyword ranking so the snippet is relevant to the query.
+    q_words = {w for w in query.lower().split() if len(w) > 3}
+    blocks: list[str] = []
+    for d in docs:
+        for para in d["content"].split("\n\n"):
+            para = para.strip()
+            if len(para) < 20:
+                continue
+            score = sum(1 for w in q_words if w in para.lower())
+            blocks.append((score, para))
+    blocks.sort(key=lambda b: b[0], reverse=True)
+    out, total = [], 0
+    for _, para in blocks:
+        if total + len(para) > max_chars:
+            break
+        out.append(para)
+        total += len(para)
+    return "\n\n".join(out) if out else docs[0]["content"][:max_chars]
 
 
 def retrieve(query: str, top_k: int = 4) -> str:
     """
     Retrieve the most relevant chunks for a given query.
     Returns a single formatted string for LLM context injection.
+    Falls back to local product text when the vector stack is absent.
     """
+    if not vector_available():
+        return _local_context(query)
     try:
         client = get_chroma_client()
         model = get_model()
         collection = client.get_or_create_collection(COLLECTION_NAME)
 
         if collection.count() == 0:
-            return "No knowledge base found. Please run the ingestion script first."
+            return _local_context(query)
 
         # Embed the query
         query_embedding = model.encode([query]).tolist()[0]
@@ -43,7 +76,7 @@ def retrieve(query: str, top_k: int = 4) -> str:
         ]
 
         if not filtered:
-            return "No relevant context found in knowledge base."
+            return _local_context(query)
 
         # Format for LLM consumption
         context_parts = []
@@ -55,7 +88,7 @@ def retrieve(query: str, top_k: int = 4) -> str:
 
     except Exception as e:
         logger.warning(f"RAG retrieval failed: {e}")
-        return "No product context available."
+        return _local_context(query)
 
 
 def retrieve_hrms_context(company_description: str) -> str:

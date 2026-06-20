@@ -1,0 +1,16 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="RazorInfotech">
+  <!-- upper lash / leaf (light green) -->
+  <path d="M7 44 Q30 21 52 20 Q75 19 93 37 Q72 27 50 28 Q27 29 7 44 Z" fill="#9CCB3B"/>
+  <!-- lower lid / leaf (dark green) -->
+  <path d="M9 54 Q30 81 50 81 Q73 81 93 52 Q72 69 50 70 Q27 69 9 54 Z" fill="#2E7D32"/>
+  <!-- iris: six colour segments around a black pupil -->
+  <g>
+    <path d="M50 50 L66 50 A16 16 0 0 1 58 63.86 Z" fill="#1577C0"/>
+    <path d="M50 50 L58 63.86 A16 16 0 0 1 42 63.86 Z" fill="#1AA0A8"/>
+    <path d="M50 50 L42 63.86 A16 16 0 0 1 34 50 Z" fill="#5BA82F"/>
+    <path d="M50 50 L34 50 A16 16 0 0 1 42 36.14 Z" fill="#F2C00E"/>
+    <path d="M50 50 L42 36.14 A16 16 0 0 1 58 36.14 Z" fill="#EE7D1B"/>
+    <path d="M50 50 L58 36.14 A16 16 0 0 1 66 50 Z" fill="#D6342A"/>
+  </g>
+  <circle cx="50" cy="50" r="6.6" fill="#111111"/>
+</svg>

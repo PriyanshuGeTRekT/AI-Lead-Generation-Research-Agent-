@@ -4,10 +4,20 @@ Uses HuggingFace sentence-transformers (open source, no API key needed).
 """
 import os
 from typing import List, Dict
-import chromadb
-from chromadb.config import Settings
-from sentence_transformers import SentenceTransformer
 from loguru import logger
+
+# chromadb + sentence-transformers are heavy and lack Windows-ARM64 wheels, so
+# they are imported LAZILY (inside the getters). The app boots without them; RAG
+# then falls back to the local product text (see rag/retriever.py).
+try:
+    import chromadb  # noqa: F401
+    _VECTOR_OK = True
+except Exception:
+    _VECTOR_OK = False
+
+
+def vector_available() -> bool:
+    return _VECTOR_OK
 
 # Bug fix: was reading CHROMA_PATH directly from os.getenv, bypassing Pydantic
 # settings validation and the central config. Now reads from config singleton,
@@ -23,17 +33,20 @@ _model = None
 _chroma_client = None
 
 
-def get_model() -> SentenceTransformer:
+def get_model():
     global _model
     if _model is None:
+        from sentence_transformers import SentenceTransformer
         logger.info(f"Loading embedding model: {EMBED_MODEL}")
         _model = SentenceTransformer(EMBED_MODEL)
     return _model
 
 
-def get_chroma_client() -> chromadb.Client:
+def get_chroma_client():
     global _chroma_client
     if _chroma_client is None:
+        import chromadb
+        from chromadb.config import Settings
         _chroma_client = chromadb.PersistentClient(
             path=CHROMA_PATH,
             settings=Settings(anonymized_telemetry=False)
@@ -61,6 +74,10 @@ def ingest_documents(documents: List[Dict]) -> int:
     Ingest scraped documents into ChromaDB.
     Returns number of chunks stored.
     """
+    if not _VECTOR_OK:
+        logger.warning("Vector stack unavailable — RAG runs in local-text mode; skipping embedding.")
+        return 0
+
     client = get_chroma_client()
     model = get_model()
 

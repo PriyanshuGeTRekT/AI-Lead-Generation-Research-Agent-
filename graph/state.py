@@ -12,6 +12,12 @@ class Lead(TypedDict):
     location: Optional[str]
     address: Optional[str]                   # Physical office address if found
     phone: Optional[str]                     # Contact phone number if found
+    phone_type: Optional[str]                # 'mobile' | 'landline'
+    phone_source: Optional[str]              # 'google_places' | 'company_website'
+    contact_confidence: Optional[str]        # 'high' | 'medium' | 'low'
+    employee_band: Optional[str]             # e.g. "51-200 employees" (LinkedIn band)
+    employee_min: Optional[int]
+    employee_max: Optional[int]
     description: Optional[str]
     decision_makers: Optional[List[str]]
     contact_emails: Optional[List[str]]
@@ -40,6 +46,10 @@ class Lead(TypedDict):
     follow_up_sequence: Optional[List[dict]] # [{day, subject, email_body}, ...] — 3 follow-ups
     verified_emails: Optional[List[dict]]    # [{email, valid, quality}, ...] from email verifier
 
+    # ── Signature-feature payloads (optional, never required) ──────────────────
+    debate: Optional[dict]                   # Adversarial debate transcript + consensus
+    simulation: Optional[dict]               # Buyer simulation / email arena result
+
 
 class LeadState(TypedDict):
     keyword: str                              # Input: business category to search
@@ -50,3 +60,13 @@ class LeadState(TypedDict):
     errors: Annotated[List[str], operator.add]
     correlation_id: Optional[str]             # Trace ID linking all agent logs for one run
     max_leads: Optional[int]                  # Per-run cap; overrides config default
+    country: Optional[str]                    # geo filter: country (India-only ICP)
+    region: Optional[str]                     # geo filter: state/region or preset
+    exclude_with_hrms: Optional[bool]         # drop companies already running an HRMS
+    mode: Optional[str]                       # 'discover' | 'company' (find a named company)
+    fast: Optional[bool]                      # fast mode: deterministic, no per-candidate LLM
+    run_id: Optional[str]                     # Theater stream id for live agent events
+    run_id: Optional[str]                     # Theater stream id (matches the pollable job id)
+    country: Optional[str]                    # Geo filter: target country
+    region: Optional[str]                     # Geo filter: target state/region
+    exclude_with_hrms: Optional[bool]         # Drop companies that already run an HRMS

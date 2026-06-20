@@ -111,6 +111,11 @@ INSTANTLY_API_KEY=your_instantly_key # B2B contact database (1k free credits)
 LANGCHAIN_API_KEY=your_ls_key        # LangSmith tracing
 SLACK_WEBHOOK_URL=https://hooks...   # Human review via Slack
 BASE_URL=http://localhost:8000        # Used in Slack approve/reject links
+
+# Security for non-local deployments
+API_ADMIN_KEY=change_me              # Required via X-API-Key or ?api_key=... for remote API access
+REVIEW_ACTION_TOKEN=change_me        # Added to Slack approve/reject links as ?token=...
+CORS_ALLOWED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000
 ```
 
 ### 3. Run
@@ -270,6 +275,11 @@ Without `SLACK_WEBHOOK_URL`, the Sales Agent sets status directly to `outreach_r
 2. Enable Incoming Webhooks for your workspace
 3. Copy the webhook URL to `.env` as `SLACK_WEBHOOK_URL`
 4. Set `BASE_URL=http://your-server:8000` so the approve/reject links in Slack point to your server
+5. Set `REVIEW_ACTION_TOKEN` so Slack approve/reject GET links cannot be used without the token
+
+### API Security
+
+Localhost and private-network clients can use the dashboard without an API key for development. Before exposing the API publicly, set `API_ADMIN_KEY`; protected endpoints then require `X-API-Key: <key>` or `?api_key=<key>`. Lead-data endpoints, cache flushing, lead generation, ingestion, and POST approve/reject actions are protected. Slack GET approve/reject links use `REVIEW_ACTION_TOKEN`.
 
 ---
 

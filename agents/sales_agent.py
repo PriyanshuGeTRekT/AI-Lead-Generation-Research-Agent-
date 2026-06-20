@@ -15,6 +15,8 @@ from rag.retriever import retrieve_hrms_context
 from rag.hallucination_guard import guard_llm_response
 from tools.email_verifier import verify_emails, best_emails
 from observability.langsmith_tracer import stage_timer, log_hallucination_event
+from observability.event_bus import emit
+from agents.buyer_simulator import simulate_arena
 from core.config import get_settings
 
 settings = get_settings()
@@ -132,7 +134,7 @@ class SalesAgent(BaseAgent):
 
     def _generate_sequence(self, lead: dict, rag_context: str) -> tuple:
         """
-        Generate Day 1 email + 3 follow-ups.
+        Generate the full 4-touch sequence (Day 1/3/7/14) in ONE LLM call.
         Returns (outreach_draft dict, follow_up_sequence list).
         """
         company = lead.get("company_name", "Unknown")
@@ -142,86 +144,56 @@ class SalesAgent(BaseAgent):
         tech_stack_str = ", ".join(tech.get("current_tools", [])) or "not detected"
         pitch_angle = tech.get("pitch_angle", "Focus on automation and time savings.")
 
-        # ── Day 1 ──────────────────────────────────────────────────────────────
-        day1_raw = self.call_llm(
-            DAY1_PROMPT.format(
-                rag_context=rag_context,
-                lead_info=self._build_lead_info(lead),
-                tech_stack=tech_stack_str,
-                pitch_angle=pitch_angle,
-                sender_name=settings.sender_name,
-            ),
-            temperature=settings.llm_temperature_creative,
-            max_tokens=settings.llm_max_tokens_creative,
-            use_cache=False,
-        )
-        day1 = self.parse_json_response(day1_raw)
+        prompt = f"""You are a B2B sales copywriter for HumanMaximizer, an Indian HRMS company.
 
-        # ── Day 3 ──────────────────────────────────────────────────────────────
-        day3_raw = self.call_llm(
-            DAY3_PROMPT.format(
-                company_name=company,
-                day1_subject=day1.get("subject", ""),
-                dm_name=dm_name,
-                main_pain_point=main_pain,
-                sender_name=settings.sender_name,
-            ),
-            temperature=settings.llm_temperature_creative,
-            max_tokens=400,
-            use_cache=False,
-        )
-        day3 = self.parse_json_response(day3_raw)
+Product capabilities (use ONLY what's stated, do not invent features):
+{rag_context[:900]}
 
-        # ── Day 7 ──────────────────────────────────────────────────────────────
-        day7_raw = self.call_llm(
-            DAY7_PROMPT.format(
-                company_name=company,
-                industry=lead.get("industry", ""),
-                dm_name=dm_name,
-                main_pain_point=main_pain,
-                sender_name=settings.sender_name,
-                rag_context=rag_context[:500],
-            ),
-            temperature=settings.llm_temperature_creative,
-            max_tokens=400,
-            use_cache=False,
-        )
-        day7 = self.parse_json_response(day7_raw)
+Prospect:
+{self._build_lead_info(lead)}
+Current HR stack: {tech_stack_str}
+Pitch angle: {pitch_angle}
+Decision-maker first name (else 'there'): {dm_name}
+Main pain point: {main_pain}
+Sender sign-off: {settings.sender_name}, HumanMaximizer | humanmaximizer.com
 
-        # ── Day 14 ─────────────────────────────────────────────────────────────
-        day14_raw = self.call_llm(
-            DAY14_PROMPT.format(
-                company_name=company,
-                dm_name=dm_name,
-                sender_name=settings.sender_name,
-            ),
-            temperature=settings.llm_temperature_creative,
-            max_tokens=300,
-            use_cache=False,
+Write a 4-touch cold outreach sequence. Each email under 120 words, specific, one low-friction CTA,
+no hype words. Respond with JSON ONLY:
+{{
+  "day1":  {{"subject": "...", "email_body": "...(cold intro, company-specific insight)", "follow_up_note": "...(why this angle)"}},
+  "day3":  {{"subject": "Re: ...", "email_body": "...(short follow-up, one new value point)"}},
+  "day7":  {{"subject": "...", "email_body": "...(value email, soft question, no hard ask)"}},
+  "day14": {{"subject": "Closing the loop — {company}", "email_body": "...(brief break-up, leaves door open)"}}
+}}"""
+
+        data = self.parse_json_response(
+            self.call_llm(prompt, temperature=settings.llm_temperature_creative, max_tokens=1100, use_cache=False)
         )
-        day14 = self.parse_json_response(day14_raw)
+        d1, d3 = data.get("day1", {}), data.get("day3", {})
+        d7, d14 = data.get("day7", {}), data.get("day14", {})
 
         outreach_draft = {
-            "subject": day1.get("subject", ""),
-            "email_body": day1.get("email_body", ""),
-            "follow_up_note": day1.get("follow_up_note", ""),
+            "subject": d1.get("subject", ""),
+            "email_body": d1.get("email_body", ""),
+            "follow_up_note": d1.get("follow_up_note", ""),
         }
-
         follow_up_sequence = [
-            {"day": 3,  "subject": day3.get("subject", ""),  "email_body": day3.get("email_body", "")},
-            {"day": 7,  "subject": day7.get("subject", ""),  "email_body": day7.get("email_body", "")},
-            {"day": 14, "subject": day14.get("subject", ""), "email_body": day14.get("email_body", "")},
+            {"day": 3,  "subject": d3.get("subject", ""),  "email_body": d3.get("email_body", "")},
+            {"day": 7,  "subject": d7.get("subject", ""),  "email_body": d7.get("email_body", "")},
+            {"day": 14, "subject": d14.get("subject", ""), "email_body": d14.get("email_body", "")},
         ]
-
         return outreach_draft, follow_up_sequence
 
     @stage_timer("sales_agent")
     def run(self, state: LeadState) -> LeadState:
         leads = state.get("leads", [])
-        qualified = [l for l in leads if l.get("status") in ("qualified", "disqualified", "researched")]
+        qualified = [l for l in leads if l.get("status") == "qualified"]
         correlation_id = state.get("correlation_id", self.correlation_id)
+        run_id = state.get("run_id")
+        emit(run_id, "stage_start", agent="sales_agent", stage="sales",
+             message="Drafting + buyer-simulating sequences")
 
-        # Process all qualified/disqualified leads for sequence generation and Slack HITL review
+        # Only leads that passed qualification should get outreach drafts.
         qualified_for_sequences = qualified
 
         self.log.info(
@@ -254,6 +226,27 @@ class SalesAgent(BaseAgent):
 
             try:
                 outreach_draft, follow_up_sequence = self._generate_sequence(lead, rag_context)
+
+                # ── Buyer Simulation & Email Arena ──────────────────────────────
+                # Role-play the decision maker, A/B the Day-1 email against a sharper
+                # Variant B, and ship the self-play winner. Fail-safe: keep Variant A.
+                sim = simulate_arena(
+                    self, lead,
+                    outreach_draft.get("subject", ""),
+                    outreach_draft.get("email_body", ""),
+                )
+                if sim:
+                    lead["simulation"] = sim
+                    winner = sim.get("winner")
+                    wv = next((v for v in sim.get("variants", []) if v.get("variant") == winner), None)
+                    if wv and winner == "B" and wv.get("email_body"):
+                        outreach_draft["subject"] = wv.get("subject") or outreach_draft.get("subject")
+                        outreach_draft["email_body"] = wv.get("email_body")
+                    emit(run_id, "email", agent="sales_agent", stage="sales",
+                         message=f"Variant {winner} won the arena for {company_name}", lead=lead)
+                else:
+                    emit(run_id, "email", agent="sales_agent", stage="sales",
+                         message=f"Sequence drafted for {company_name}", lead=lead)
 
                 # Hallucination guard on Day 1 email body
                 # strict=False: sales emails naturally echo lead data (employee counts,
@@ -295,6 +288,8 @@ class SalesAgent(BaseAgent):
 
         outreach_count = sum(1 for l in leads if l.get("outreach_draft"))
         self.log.info(f"Sales Agent complete: {outreach_count} sequences generated")
+        emit(run_id, "stage_end", agent="sales_agent", stage="sales",
+             message=f"{outreach_count} sequences generated")
 
         return {
             **state,

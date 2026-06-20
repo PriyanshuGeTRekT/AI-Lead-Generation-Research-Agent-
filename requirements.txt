@@ -8,8 +8,11 @@ langchain==0.3.0
 langchain-core==0.3.0
 langchain-groq==0.2.0
 langchain-openai==0.2.0
-chromadb==0.5.15
-sentence-transformers==3.1.1
+# Local-vector RAG (OPTIONAL). No Windows-ARM64 wheels — if these don't install,
+# the app still runs: RAG falls back to the local product text in ./knowledge.
+# Install with:  pip install chromadb==0.5.15 sentence-transformers==3.1.1
+# chromadb==0.5.15
+# sentence-transformers==3.1.1
 duckduckgo-search==6.3.5
 requests==2.32.3
 beautifulsoup4==4.12.3
@@ -21,3 +24,7 @@ loguru==0.7.2
 celery==5.4.0
 psycopg2-binary==2.9.9
 dnspython==2.6.1
+langchain-aws>=0.2.10
+boto3>=1.39.0
+langchain-anthropic==0.2.4
+langchain-google-genai==2.0.4

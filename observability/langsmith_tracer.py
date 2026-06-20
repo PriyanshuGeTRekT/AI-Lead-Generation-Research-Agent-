@@ -53,11 +53,18 @@ def setup_langsmith():
     Enable LangSmith tracing if API key is configured.
     All LangChain/LangGraph calls are automatically traced when enabled.
     """
-    if settings.langchain_api_key:
+    # Prefer the runtime config (Settings UI / data/runtime_config.json) over static env.
+    try:
+        from core import runtime_config as rc
+        key = (rc.get("langchain_api_key") or settings.langchain_api_key or "").strip()
+        project = (rc.get("langchain_project") or settings.langchain_project or "ai-lead-gen").strip()
+    except Exception:
+        key, project = (settings.langchain_api_key or "").strip(), (settings.langchain_project or "ai-lead-gen")
+    if key:
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
-        os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
-        logger.info(f"LangSmith tracing enabled → project: {settings.langchain_project}")
+        os.environ["LANGCHAIN_API_KEY"] = key
+        os.environ["LANGCHAIN_PROJECT"] = project
+        logger.info(f"LangSmith tracing enabled → project: {project}")
     else:
         logger.info("LangSmith tracing disabled (no LANGCHAIN_API_KEY set)")
 
